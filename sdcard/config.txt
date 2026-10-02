@@ -1,0 +1,8 @@
+# RTR-OS - configuração do firmware do Raspberry Pi 4.
+
+arm_64bit=1
+kernel=kernel8.img
+kernel_address=0x80000
+
+# O driver da UART0 calcula 115200 baud a partir deste clock.
+init_uart_clock=48000000
