@@ -11,7 +11,7 @@
     .section ".text.boot", "ax"
     .globl _start
 _start:
-    mov     x20, x0                     /* preserva o ponteiro do DTB */
+    mov     x20, x0                     /* preserva o endereço do DTB */
 
     mrs     x1, mpidr_el1
     and     x1, x1, #3
@@ -29,7 +29,7 @@ from_el2:
     mov     x1, #(1 << 31)              /* HCR_EL2.RW: EL1 em AArch64 */
     msr     hcr_el2, x1
 
-    mrs     x1, cnthctl_el2             /* libera o timer físico para EL1 */
+    mrs     x1, cnthctl_el2             /* libera o contador e o timer físico para EL1 */
     orr     x1, x1, #3
     msr     cnthctl_el2, x1
     msr     cntvoff_el2, xzr

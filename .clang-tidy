@@ -1,0 +1,18 @@
+# RTR-OS - verificações estáticas exigidas pelas regras de codificação (D9).
+#
+# misc-no-recursion impõe a regra "sem recursão". As demais procuram erros de
+# lógica, comportamento indefinido e valores de retorno ignorados.
+#
+# Desligadas, com motivo:
+#   bugprone-easily-swappable-parameters   acusa qualquer função com dois inteiros seguidos
+#   clang-analyzer-security.insecureAPI.*  trata de funções de libc que o kernel não tem
+Checks: >
+  -*,
+  clang-analyzer-*,
+  bugprone-*,
+  cert-*,
+  misc-no-recursion,
+  misc-unused-parameters,
+  -bugprone-easily-swappable-parameters,
+  -clang-analyzer-security.insecureAPI.*
+HeaderFilterRegex: 'kernel/include/.*'

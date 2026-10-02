@@ -7,23 +7,36 @@ set(CMAKE_C_EXTENSIONS ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_EXECUTABLE_SUFFIX ".elf")
 
-set(LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/src/boot/linker.ld)
+set(LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/kernel/boot/linker.ld)
 
-add_executable(kernel8
-    src/boot/start.S
-    src/boot/vectors.S
-    src/drivers/gic.c
-    src/drivers/timer.c
-    src/drivers/uart.c
-    src/kernel/kprintf.c
-    src/kernel/main.c
-    src/kernel/sched.c
-    src/kernel/trap.c
+set(KERNEL_C_SOURCES
+    kernel/board/gic.c
+    kernel/board/uart.c
+    kernel/core/console.c
+    kernel/core/main.c
+    kernel/core/memory.c
+    kernel/core/mmu.c
+    kernel/core/panic.c
+    kernel/core/timer.c
+    kernel/core/trap.c
 )
 
-target_include_directories(kernel8 PRIVATE src/include)
+add_executable(kernel8
+    kernel/boot/start.S
+    kernel/boot/vectors.S
+    ${KERNEL_C_SOURCES}
+)
 
-# -mgeneral-regs-only: o kernel não usa FP/SIMD, então o contexto salvo fica pequeno.
+target_include_directories(kernel8 PRIVATE kernel/include)
+
+# Compilação de ensaio: o kernel tenta gravar no próprio código logo após
+# ligar a MMU. O resultado esperado é a parada por exceção.
+option(RTR_FAULT_TEST "Ensaio de proteção de memória do kernel" OFF)
+if(RTR_FAULT_TEST)
+    target_compile_definitions(kernel8 PRIVATE RTR_FAULT_TEST)
+endif()
+
+# -mgeneral-regs-only: o kernel não usa FP/SIMD.
 # -mstrict-align: com a MMU desligada, acesso desalinhado à memória gera falha.
 target_compile_options(kernel8 PRIVATE
     -mcpu=cortex-a72
@@ -34,8 +47,27 @@ target_compile_options(kernel8 PRIVATE
     -fno-pic
     -O2
     -g
+)
+
+# Regras de codificação do plano (D9): todo aviso é erro, e o analisador
+# estático roda a cada compilação. A lista de verificações está em .clang-tidy.
+set(RTR_C_WARNINGS
     -Wall
     -Wextra
+    -Werror
+    -Wconversion
+    -Wshadow
+    -Wundef
+    -Wvla
+    -Wstrict-prototypes
+    -Wmissing-prototypes
+    -Wimplicit-fallthrough
+)
+set_source_files_properties(${KERNEL_C_SOURCES}
+    PROPERTIES COMPILE_OPTIONS "${RTR_C_WARNINGS}"
+)
+set_target_properties(kernel8 PROPERTIES
+    C_CLANG_TIDY "${RTR_CLANG_TIDY};--warnings-as-errors=*"
 )
 
 target_link_options(kernel8 PRIVATE

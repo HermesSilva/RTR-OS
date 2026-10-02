@@ -5,6 +5,7 @@ set(CMAKE_SYSTEM_PROCESSOR aarch64)
 
 set(LLVM_HINTS "C:/Program Files/LLVM/bin")
 find_program(RTR_CLANG clang HINTS ${LLVM_HINTS} REQUIRED)
+find_program(RTR_CLANG_TIDY clang-tidy HINTS ${LLVM_HINTS} REQUIRED)
 find_program(RTR_OBJCOPY llvm-objcopy HINTS ${LLVM_HINTS} REQUIRED)
 
 set(CMAKE_C_COMPILER ${RTR_CLANG})

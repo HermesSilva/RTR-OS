@@ -1,14 +1,14 @@
 /*
  * RTR-OS - vetores de exceção de EL1.
  *
- * Toda entrada no kernel salva um struct trap_frame na pilha da tarefa
- * interrompida. O tratador em C devolve o frame a restaurar, que pode ser
- * o de outra tarefa: a troca de contexto é só isso.
+ * Só a interrupção tomada pelo próprio kernel (EL1 com SP_EL1) é tratada.
+ * Qualquer outra exceção é relatada no console e o sistema para.
  */
 
-#define FRAME_SIZE 272                  /* sizeof(struct trap_frame) */
+#define FRAME_SIZE 272
 
-    .macro kernel_entry
+    /* Salva todos os registradores de uso geral e o estado de retorno. */
+    .macro save_context
     sub     sp, sp, #FRAME_SIZE
     stp     x0, x1, [sp, #16 * 0]
     stp     x2, x3, [sp, #16 * 1]
@@ -31,62 +31,7 @@
     str     x22, [sp, #16 * 16]
     .endm
 
-    .macro vector label
-    .balign 0x80
-    b       \label
-    .endm
-
-    /* Vetor que o kernel não espera receber: despeja o estado e para. */
-    .macro bad_vector id
-    .balign 0x80
-    kernel_entry
-    mov     x0, sp
-    mov     x1, #\id
-    mrs     x2, esr_el1
-    b       trap_bad
-    .endm
-
-    .section ".text", "ax"
-    .balign 0x800
-    .globl vectors
-vectors:
-    /* EL1 usando SP_EL0 (não usado) */
-    bad_vector 0
-    bad_vector 1
-    bad_vector 2
-    bad_vector 3
-    /* EL1 usando SP_EL1: o caso normal */
-    vector  el1_sync
-    vector  el1_irq
-    bad_vector 6
-    bad_vector 7
-    /* EL0 em AArch64 (ainda não há modo usuário) */
-    bad_vector 8
-    bad_vector 9
-    bad_vector 10
-    bad_vector 11
-    /* EL0 em AArch32 */
-    bad_vector 12
-    bad_vector 13
-    bad_vector 14
-    bad_vector 15
-
-    .balign 0x80
-el1_sync:
-    kernel_entry
-    mov     x0, sp
-    mrs     x1, esr_el1
-    bl      trap_sync
-    b       trap_return
-
-el1_irq:
-    kernel_entry
-    mov     x0, sp
-    bl      trap_irq
-
-/* x0 = frame a restaurar */
-trap_return:
-    mov     sp, x0
+    .macro restore_context
     ldr     x22, [sp, #16 * 16]
     ldp     x30, x21, [sp, #16 * 15]
     msr     elr_el1, x21
@@ -107,4 +52,51 @@ trap_return:
     ldp     x26, x27, [sp, #16 * 13]
     ldp     x28, x29, [sp, #16 * 14]
     add     sp, sp, #FRAME_SIZE
+    .endm
+
+    .macro unexpected id
+    .balign 0x80
+    mov     x0, #\id
+    b       unexpected_entry
+    .endm
+
+    .section ".text", "ax"
+    .balign 0x800
+    .globl vectors
+vectors:
+    /* EL1 usando SP_EL0 */
+    unexpected 0
+    unexpected 1
+    unexpected 2
+    unexpected 3
+    /* EL1 usando SP_EL1 */
+    unexpected 4
+    .balign 0x80
+    b       el1_irq
+    unexpected 6
+    unexpected 7
+    /* EL0 em AArch64 */
+    unexpected 8
+    unexpected 9
+    unexpected 10
+    unexpected 11
+    /* EL0 em AArch32 */
+    unexpected 12
+    unexpected 13
+    unexpected 14
+    unexpected 15
+
+    .balign 0x80
+el1_irq:
+    save_context
+    bl      trap_irq
+    restore_context
     eret
+
+unexpected_entry:
+    mrs     x1, esr_el1
+    mrs     x2, elr_el1
+    mrs     x3, far_el1
+    bl      trap_unexpected             /* não retorna */
+1:  wfe
+    b       1b
