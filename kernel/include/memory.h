@@ -1,8 +1,8 @@
 /*
- * RTR-OS - rotinas de memória.
+ * RTR-OS - memory routines.
  *
- * O compilador gera chamadas a memcpy e memset por conta própria (cópia de
- * estruturas, inicialização), por isso elas precisam existir com esses nomes.
+ * The compiler emits calls to memcpy and memset on its own (struct copies,
+ * initialization), so they must exist under those names.
  */
 #ifndef RTR_MEMORY_H
 #define RTR_MEMORY_H

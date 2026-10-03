@@ -1,4 +1,4 @@
-/* RTR-OS - interrupção periódica do timer e medição do atraso de tratamento. */
+/* RTR-OS - the core timer in one-shot mode. */
 #include "timer.h"
 
 #include <stddef.h>
@@ -6,84 +6,66 @@
 #include "arch.h"
 #include "board.h"
 
-static uint64_t period_ticks;
-static uint64_t next_instant;
-static struct timer_stats stats;
+static uint64_t armed_instant = UINT64_MAX;
+static struct rtr_duration delay;
 
-static void reset_window(void)
+void duration_record(struct rtr_duration *duration, uint64_t value, uint64_t instant)
 {
-    stats.window_fires = 0U;
-    stats.window_min = UINT64_MAX;
-    stats.window_max = 0U;
-    stats.window_sum = 0U;
-}
-
-void timer_start(uint64_t period)
-{
-    if (period == 0U) {
+    if (duration == NULL) {
         return;
     }
 
-    period_ticks = period;
-    reset_window();
+    if ((duration->count == 0U) || (value < duration->minimum)) {
+        duration->minimum = value;
+    }
+    if (value > duration->maximum) {
+        duration->maximum = value;
+    }
+    duration->count++;
+    duration->sum += value;
 
-    next_instant = arch_counter_read() + period_ticks;
-    arch_timer_set(next_instant);
+    if (value > duration->worst) {
+        duration->worst = value;
+        duration->worst_instant = instant;
+    }
+}
+
+void duration_read(struct rtr_duration *duration, struct rtr_duration *out)
+{
+    if ((duration == NULL) || (out == NULL)) {
+        return;
+    }
+
+    *out = *duration;
+    duration->count = 0U;
+    duration->minimum = 0U;
+    duration->maximum = 0U;
+    duration->sum = 0U;
+}
+
+void timer_init(void)
+{
+    arch_counter_allow_user();
     gic_enable_irq(BOARD_IRQ_TIMER);
 }
 
-void timer_handle_irq(void)
+void timer_arm(uint64_t instant)
+{
+    armed_instant = instant;
+    arch_timer_set(instant);
+}
+
+uint64_t timer_irq_enter(void)
 {
     uint64_t now = arch_counter_read();
-    uint64_t delay = (now >= next_instant) ? (now - next_instant) : 0U;
 
-    stats.fires++;
-    stats.window_fires++;
-    stats.window_sum += delay;
-    if (delay < stats.window_min) {
-        stats.window_min = delay;
+    if (now >= armed_instant) {
+        duration_record(&delay, now - armed_instant, now);
     }
-    if (delay > stats.window_max) {
-        stats.window_max = delay;
-    }
-    if (delay > stats.worst) {
-        stats.worst = delay;
-    }
-
-    /*
-     * O próximo instante é sempre o anterior mais um período, nunca "agora
-     * mais um período": o atraso deste disparo não se acumula no seguinte.
-     * Se o kernel ficou parado por mais de um período, pula os que passaram.
-     */
-    next_instant += period_ticks;
-    if (next_instant <= now) {
-        uint64_t missed = ((now - next_instant) / period_ticks) + 1U;
-
-        stats.skipped += missed;
-        next_instant += missed * period_ticks;
-    }
-    arch_timer_set(next_instant);
+    return now;
 }
 
-uint64_t timer_periods(void)
+void timer_read_delay(struct rtr_duration *out)
 {
-    uint64_t flags = arch_irq_save();
-    uint64_t periods = stats.fires + stats.skipped;
-
-    arch_irq_restore(flags);
-    return periods;
-}
-
-void timer_read_stats(struct timer_stats *out)
-{
-    uint64_t flags;
-
-    if (out == NULL) {
-        return;
-    }
-
-    flags = arch_irq_save();
-    *out = stats;
-    reset_window();
-    arch_irq_restore(flags);
+    duration_read(&delay, out);
 }

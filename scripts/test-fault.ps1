@@ -1,8 +1,9 @@
-# RTR-OS - ensaio de proteção de memória do kernel.
+# RTR-OS - kernel memory protection test.
 #
-# Compila, em build-fault, uma versão que grava no próprio código logo após
-# ligar a MMU, e roda no QEMU. O resultado esperado é a parada por exceção;
-# se a gravação for aceita, o kernel imprime "ensaio FALHOU".
+# Builds, in build-fault, a version that writes to its own code right after
+# turning on the MMU, and runs it in the official QEMU. The expected result
+# is a halt by exception; if the write is accepted, the kernel prints
+# "test FAILED".
 
 $ErrorActionPreference = 'Stop'
 
@@ -28,9 +29,9 @@ Start-Sleep -Milliseconds 300
 
 $output = Get-Content $log -Encoding utf8
 $output
-if (($output -match 'PANIC: excecao inesperada') -and -not ($output -match 'ensaio FALHOU')) {
-    Write-Host "`nRESULTADO: proteção confirmada, a gravação no código foi barrada."
+if (($output -match 'PANIC: unexpected exception') -and -not ($output -match 'test FAILED')) {
+    Write-Host "`nRESULT: protection confirmed, the write to kernel code was blocked."
     exit 0
 }
-Write-Host "`nRESULTADO: a proteção NÃO funcionou."
+Write-Host "`nRESULT: the protection did NOT work."
 exit 1

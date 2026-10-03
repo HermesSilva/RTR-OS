@@ -1,4 +1,4 @@
-# RTR-OS - compilação cruzada para AArch64 bare-metal com clang/lld.
+# RTR-OS - cross compilation for bare-metal AArch64 with clang/lld.
 
 set(CMAKE_SYSTEM_NAME Generic)
 set(CMAKE_SYSTEM_PROCESSOR aarch64)
@@ -13,5 +13,5 @@ set(CMAKE_ASM_COMPILER ${RTR_CLANG})
 set(CMAKE_C_COMPILER_TARGET aarch64-none-elf)
 set(CMAKE_ASM_COMPILER_TARGET aarch64-none-elf)
 
-# Não há libc nem runtime para linkar os programas de teste do CMake.
+# There is no libc or runtime to link CMake's test programs against.
 set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)

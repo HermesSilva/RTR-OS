@@ -1,4 +1,4 @@
-# RTR-OS - configura (na primeira vez) e compila. Gera build\kernel8.img.
+# RTR-OS - configures (the first time) and builds. Produces build\kernel8.img.
 $ErrorActionPreference = 'Stop'
 
 $root = Split-Path -Parent $PSScriptRoot

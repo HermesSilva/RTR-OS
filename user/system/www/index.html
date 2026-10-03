@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="auto">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RTR-OS</title>
+<style>
+:root {
+  --bg: #f4f5f7; --card: #ffffff; --ink: #1b1f24; --dim: #5b6470; --line: #d9dde3; --field: #ffffff;
+  --ok: #1a7f37; --warn: #9a6700; --bad: #cf222e; --accent: #0550ae; --accent-ink: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="auto"] {
+    --bg: #0e1116; --card: #171b22; --ink: #e6e9ee; --dim: #9aa4b2; --line: #2b323c; --field: #0e1116;
+    --ok: #3fb950; --warn: #d29922; --bad: #f85149; --accent: #6cb6ff; --accent-ink: #0e1116;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1116; --card: #171b22; --ink: #e6e9ee; --dim: #9aa4b2; --line: #2b323c; --field: #0e1116;
+  --ok: #3fb950; --warn: #d29922; --bad: #f85149; --accent: #6cb6ff; --accent-ink: #0e1116;
+}
+:root[data-theme="amber"] {
+  --bg: #130e04; --card: #1d1607; --ink: #ffb62b; --dim: #b07f1f; --line: #3d2d0c; --field: #130e04;
+  --ok: #c9d62a; --warn: #ffd166; --bad: #ff6b35; --accent: #ffc53d; --accent-ink: #1d1607;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink);
+       font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+:root[data-theme="amber"] body { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 14px; }
+header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px;
+         padding: 14px 24px; border-bottom: 1px solid var(--line); background: var(--card); }
+h1 { font-size: 20px; margin: 0; }
+h1 small { font-weight: 400; color: var(--dim); font-size: 13px; margin-left: 8px; }
+h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); margin: 0 0 10px; }
+h3 { font-size: 15px; margin: 0; }
+nav { display: flex; gap: 4px; margin-left: 8px; }
+nav button { background: none; border: 1px solid transparent; color: var(--dim); padding: 6px 14px;
+             border-radius: 6px; font: inherit; cursor: pointer; }
+nav button[aria-selected="true"] { color: var(--ink); border-color: var(--line); background: var(--bg); }
+.badge { padding: 3px 12px; border-radius: 999px; font-weight: 600; color: #fff; background: var(--dim); }
+.badge.ok { background: var(--ok); } .badge.warn { background: var(--warn); } .badge.bad { background: var(--bad); }
+:root[data-theme="amber"] .badge { color: var(--accent-ink); }
+.meta { color: var(--dim); font-size: 13px; margin-left: auto; text-align: right; }
+.stale { color: var(--bad); font-weight: 600; }
+.theme { display: flex; gap: 2px; border: 1px solid var(--line); border-radius: 6px; padding: 2px; }
+.theme button { background: none; border: 0; color: var(--dim); padding: 3px 9px; border-radius: 4px; font: inherit; font-size: 12px; cursor: pointer; }
+.theme button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+main { padding: 20px 24px 40px; max-width: 1280px; margin: 0 auto; }
+section[hidden] { display: none; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; margin-bottom: 20px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; }
+.big { font-size: 28px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.big .unit { font-size: 14px; font-weight: 400; color: var(--dim); margin-left: 4px; }
+.bar { height: 6px; border-radius: 3px; background: var(--line); margin: 8px 0 10px; overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--accent); width: 0; transition: width .3s; }
+dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 0; font-size: 13px; }
+dt { color: var(--dim); } dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { padding: 7px 10px; border-bottom: 1px solid var(--line); text-align: right;
+         white-space: nowrap; font-variant-numeric: tabular-nums; }
+th { color: var(--dim); font-weight: 600; }
+th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: left; }
+.alert { color: var(--bad); font-weight: 700; }
+.state { padding: 1px 8px; border-radius: 4px; border: 1px solid var(--line); }
+.state.bad { color: var(--bad); border-color: var(--bad); }
+.state.warn { color: var(--warn); border-color: var(--warn); }
+.rule { font-size: 12px; color: var(--dim); margin-top: 18px; }
+
+/* configuration */
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 16px; }
+.toolbar .note { color: var(--dim); font-size: 13px; }
+button.primary, button.ghost, button.danger { font: inherit; padding: 8px 16px; border-radius: 6px; cursor: pointer; border: 1px solid var(--line); }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+button.primary:disabled { opacity: .45; cursor: not-allowed; }
+button.ghost { background: var(--card); color: var(--ink); }
+button.danger { background: none; color: var(--bad); border-color: var(--bad); }
+.process { margin-bottom: 14px; }
+.process .head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.process .head .tag { font-size: 12px; color: var(--dim); border: 1px solid var(--line); border-radius: 4px; padding: 1px 8px; }
+.process .head .spacer { flex: 1; }
+.fields { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px 18px; }
+.field label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--dim); margin-bottom: 4px; position: relative; }
+.field label .live { margin-left: auto; font-variant-numeric: tabular-nums; }
+.help { width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--line); background: var(--card); color: var(--dim);
+        font: 600 11px/14px system-ui, sans-serif; cursor: pointer; padding: 0; flex: none; }
+.help:hover, .help[aria-expanded="true"] { border-color: var(--accent); color: var(--accent); }
+.pop { position: absolute; z-index: 5; top: 22px; left: 0; width: 320px; max-width: 80vw; background: var(--card); color: var(--ink);
+       border: 1px solid var(--accent); border-radius: 8px; padding: 12px 14px; font-size: 13px; line-height: 1.5; font-weight: 400;
+       box-shadow: 0 8px 24px rgba(0,0,0,.35); text-transform: none; letter-spacing: 0; }
+.pop b { display: block; margin-bottom: 4px; }
+.pop p { margin: 0 0 6px; } .pop p:last-child { margin: 0; }
+input[type=text], input[type=number], select, textarea {
+  width: 100%; font: inherit; color: var(--ink); background: var(--field);
+  border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; }
+input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
+input:disabled, select:disabled { opacity: .5; }
+.unit { display: grid; grid-template-columns: 1fr 72px; gap: 6px; }
+.checks { display: flex; flex-wrap: wrap; gap: 8px 16px; padding-top: 6px; }
+.checks label { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--ink); cursor: pointer; }
+.checks label.off { color: var(--dim); cursor: not-allowed; }
+.pick { display: flex; align-items: center; gap: 8px; }
+.pick .chosen { flex: 1; border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; background: var(--field); min-height: 36px; }
+.pick .chosen small { display: block; color: var(--dim); font-size: 12px; }
+.rt { font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 4px; background: var(--accent); color: var(--accent-ink); margin-left: 6px; vertical-align: 1px; }
+.lookup { list-style: none; margin: 0 0 16px; padding: 0; max-height: 50vh; overflow: auto; }
+.lookup li { border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; margin-bottom: 8px; cursor: pointer; }
+.lookup li:hover { border-color: var(--accent); }
+.lookup li.off { opacity: .5; cursor: not-allowed; }
+.lookup li b { font-size: 15px; }
+.lookup li small { display: block; color: var(--dim); }
+.overlay .box.wide { max-width: 640px; width: 90vw; }
+input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent); }
+.banner { border-left: 4px solid var(--warn); padding: 10px 14px; margin-bottom: 16px; background: var(--card); border-radius: 0 6px 6px 0; }
+.banner.bad { border-color: var(--bad); }
+.banner.ok { border-color: var(--ok); }
+details { margin-top: 16px; }
+summary { cursor: pointer; color: var(--dim); font-size: 13px; }
+textarea { min-height: 260px; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 13px; }
+.overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; z-index: 10; }
+.overlay[hidden] { display: none; }
+.overlay .box { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 24px 28px; max-width: 460px; }
+.overlay h3 { margin-bottom: 8px; }
+.overlay p { margin: 0 0 16px; color: var(--dim); }
+.overlay .actions { display: flex; gap: 10px; justify-content: flex-end; }
+.spin { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite; vertical-align: -2px; margin-right: 8px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<header>
+  <h1>RTR-OS <small>Real-time Raspberry Operating System</small></h1>
+  <nav role="tablist">
+    <button role="tab" id="tab-stats" aria-selected="true">Statistics</button>
+    <button role="tab" id="tab-config" aria-selected="false">Configuration</button>
+  </nav>
+  <span id="status" class="badge">waiting</span>
+  <span id="reason" class="meta" style="margin-left:0;text-align:left"></span>
+  <div class="meta">up for <b id="uptime">—</b><br><span id="fresh">no data</span></div>
+  <div class="theme" title="Theme">
+    <button data-theme="light">Light</button>
+    <button data-theme="dark">Dark</button>
+    <button data-theme="amber">Amber</button>
+  </div>
+</header>
+<main>
+
+<section id="stats">
+  <div class="grid">
+    <div class="card">
+      <h2>Core 0 — load</h2>
+      <div class="big"><span id="busy">—</span><span class="unit">%</span></div>
+      <div class="bar"><i id="busybar"></i></div>
+      <dl>
+        <dt>context switches</dt><dd id="switches">—</dd>
+        <dt>interrupts</dt><dd id="irqs">—</dd>
+        <dt>system calls</dt><dd id="syscalls">—</dd>
+        <dt>unhandled interrupts</dt><dd id="unhandled">—</dd>
+      </dl>
+    </div>
+    <div class="card">
+      <h2>Timer delay</h2>
+      <div class="big"><span id="tworst">—</span><span class="unit" id="tworstu"></span></div>
+      <div class="bar" style="visibility:hidden"><i></i></div>
+      <dl>
+        <dt>worst since boot</dt><dd id="tworstwhen">—</dd>
+        <dt>window minimum</dt><dd id="tmin">—</dd>
+        <dt>window average</dt><dd id="tavg">—</dd>
+        <dt>window maximum</dt><dd id="tmax">—</dd>
+        <dt>skipped periods</dt><dd id="tskip">—</dd>
+      </dl>
+    </div>
+    <div class="card">
+      <h2>Contracted load</h2>
+      <div class="big"><span id="load">—</span><span class="unit">%</span></div>
+      <div class="bar"><i id="loadbar"></i></div>
+      <dl>
+        <dt>declared in the manifest</dt><dd id="loaddecl">—</dd>
+        <dt>scaling</dt><dd id="scaling">—</dd>
+        <dt>kernel memory</dt><dd id="memk">—</dd>
+        <dt>process memory</dt><dd id="memp">—</dd>
+        <dt>board memory</dt><dd id="memt">—</dd>
+      </dl>
+    </div>
+    <div class="card">
+      <h2>Network</h2>
+      <div class="big"><span id="ip">—</span></div>
+      <div class="bar" style="visibility:hidden"><i></i></div>
+      <dl>
+        <dt>link</dt><dd id="link">—</dd>
+        <dt>hardware address</dt><dd id="mac">—</dd>
+        <dt>frames received</dt><dd id="rx">—</dd>
+        <dt>frames sent</dt><dd id="tx">—</dd>
+        <dt>errors / drops</dt><dd id="neterr">—</dd>
+        <dt>web requests</dt><dd id="reqs">—</dd>
+      </dl>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Tasks</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr>
+          <th>Task</th><th>State</th><th>Priority</th><th>Period</th><th>Limit</th>
+          <th>Limit use</th><th>CPU</th><th>Activations</th><th>Completed</th><th>Overruns</th>
+          <th>Unfinished</th><th>Response min / avg / max</th><th>Worst response</th>
+        </tr></thead>
+        <tbody id="tasks"><tr><td colspan="13">no data</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+  <p class="rule">
+    Overall state: <b>Failure</b> if a process was terminated by a fault; <b>Warning</b> if, since
+    the previous reading, there was a limit overrun, an unfinished activation, a skipped period, an
+    unhandled interrupt or a drop, or if the system started with its limits scaled down;
+    <b>Normal</b> otherwise. All times come from the system counter. The window of each measurement
+    is the interval between two readings of this page.
+  </p>
+</section>
+
+<section id="config" hidden>
+  <div id="cfg-banner" class="banner" hidden></div>
+  <div class="toolbar">
+    <button class="primary" id="cfg-save" disabled>Save and reboot</button>
+    <button class="ghost" id="cfg-add">Add process</button>
+    <button class="ghost" id="cfg-reload">Discard changes</button>
+    <button class="ghost" id="cfg-install">Install app…</button>
+    <input type="file" id="cfg-file" accept=".rpkg" hidden>
+    <span class="note" id="cfg-note"></span>
+  </div>
+  <div id="cfg-processes"></div>
+  <details>
+    <summary>Manifest text, as it will be written to the card</summary>
+    <textarea id="cfg-text" readonly spellcheck="false"></textarea>
+  </details>
+  <p class="rule">
+    Applications come as .rpkg packages: "Install app" unpacks one onto the card, and its programs then appear
+    in the program list. The installation is described by MANIFEST.TXT on the SD card and is read once at boot.
+    Saving writes the file and reboots the board; the changes take effect after the reboot. The ? next to each
+    field explains it.
+  </p>
+</section>
+
+</main>
+
+<div id="overlay" class="overlay" hidden>
+  <div class="box">
+    <h3 id="ov-title"></h3>
+    <p id="ov-text"></p>
+    <div class="actions" id="ov-actions"></div>
+  </div>
+</div>
+
+<script>
+"use strict";
+const STATES = ["—", "waiting", "ready", "running", "throttled", "faulted"];
+const PERIOD_MS = 1000;
+const NAME_RULE = /^[a-z0-9][a-z0-9_-]{0,14}$/;
+const STACKS = [4, 8, 16, 32, 64, 128];
+const DMA_SIZES = [0, 64, 256, 1024, 4096, 16384];
+let hz = 1, previous = null, lastOk = 0, bootSeen = 0;
+
+const $ = (id) => document.getElementById(id);
+const set = (id, text) => { $(id).textContent = text; };
+const num = (v) => v.toLocaleString("en-US");
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+/* ---- theme ---------------------------------------------------------- */
+function applyTheme(name) {
+  document.documentElement.dataset.theme = name;
+  document.querySelectorAll(".theme button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.theme === name)));
+  localStorage.setItem("rtr-theme", name);
+}
+document.querySelectorAll(".theme button").forEach((b) => b.addEventListener("click", () => applyTheme(b.dataset.theme)));
+applyTheme(new URLSearchParams(location.search).get("theme") || localStorage.getItem("rtr-theme") ||
+           (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
+
+/* ---- tabs ----------------------------------------------------------- */
+function showTab(name) {
+  ["stats", "config"].forEach((t) => {
+    $(t).hidden = t !== name;
+    $("tab-" + t).setAttribute("aria-selected", String(t === name));
+  });
+  if (name === "config" && !cfg.loaded) loadConfig();
+  location.hash = name;
+}
+$("tab-stats").addEventListener("click", () => showTab("stats"));
+$("tab-config").addEventListener("click", () => showTab("config"));
+
+/* ---- formatting ----------------------------------------------------- */
+function span(ticks) {
+  const ns = ticks * 1e9 / hz;
+  if (ns < 1e3) return [ns.toFixed(0), "ns"];
+  if (ns < 1e6) return [(ns / 1e3).toFixed(1), "µs"];
+  if (ns < 1e9) return [(ns / 1e6).toFixed(2), "ms"];
+  return [(ns / 1e9).toFixed(2), "s"];
+}
+const time = (ticks) => span(ticks).join(" ");
+function uptime(ticks) {
+  let s = Math.floor(ticks / hz);
+  const d = Math.floor(s / 86400); s %= 86400;
+  const h = Math.floor(s / 3600); s %= 3600;
+  const m = Math.floor(s / 60); s %= 60;
+  return (d ? d + " d " : "") + [h, m, s].map((v) => String(v).padStart(2, "0")).join(":");
+}
+function bytes(v) {
+  if (!v) return "no data";
+  if (v < 1024) return v + " B";
+  if (v < 1048576) return (v / 1024).toFixed(0) + " KiB";
+  return (v / 1048576).toFixed(1) + " MiB";
+}
+const rate = (now, before, seconds) => seconds > 0 ? num(Math.round((now - before) / seconds)) + " /s" : "—";
+const avg = (d) => d.count ? d.sum / d.count : 0;
+
+/* ---- statistics ----------------------------------------------------- */
+function render(s) {
+  hz = s.hz;
+  const p = previous;
+  const seconds = p ? (s.instant - p.instant) / hz : 0;
+  const reasons = [];
+  let failed = false;
+
+  set("uptime", uptime(s.instant - s.boot));
+  if (p && seconds > 0) {
+    const busy = Math.max(0, 100 - 100 * (s.idle - p.idle) / (s.instant - p.instant));
+    set("busy", busy.toFixed(1));
+    $("busybar").style.width = Math.min(100, busy) + "%";
+    set("switches", rate(s.switches, p.switches, seconds));
+    set("irqs", rate(s.irqs, p.irqs, seconds));
+    set("syscalls", rate(s.syscalls, p.syscalls, seconds));
+    if (s.irqs_unhandled > p.irqs_unhandled) reasons.push("unhandled interrupt");
+    if (s.timer_skipped > p.timer_skipped) reasons.push("skipped period");
+    if (s.console_dropped > p.console_dropped || s.net.tx_dropped > p.net.tx_dropped) reasons.push("drop");
+  }
+  set("unhandled", num(s.irqs_unhandled));
+  $("unhandled").className = s.irqs_unhandled ? "alert" : "";
+
+  const worst = span(s.timer_delay.worst);
+  set("tworst", worst[0]); set("tworstu", worst[1]);
+  set("tworstwhen", s.timer_delay.worst ? "at " + uptime(s.timer_delay.worst_instant - s.boot) : "—");
+  set("tmin", s.timer_delay.count ? time(s.timer_delay.min) : "no data");
+  set("tavg", s.timer_delay.count ? time(avg(s.timer_delay)) : "no data");
+  set("tmax", s.timer_delay.count ? time(s.timer_delay.max) : "no data");
+  set("tskip", num(s.timer_skipped));
+  $("tskip").className = s.timer_skipped ? "alert" : "";
+
+  set("load", (s.load.effective / 10000).toFixed(1));
+  $("loadbar").style.width = Math.min(100, s.load.effective / 10000) + "%";
+  set("loaddecl", (s.load.declared / 10000).toFixed(1) + " %");
+  set("scaling", s.load.scaled ? "applied" : "not applied");
+  $("scaling").className = s.load.scaled ? "alert" : "";
+  if (s.load.scaled) reasons.push("started with scaled limits");
+  set("memk", bytes(s.memory.kernel)); set("memp", bytes(s.memory.processes)); set("memt", bytes(s.memory.total));
+
+  set("ip", s.net.ip);
+  set("link", s.net.link ? s.net.speed + " Mbps" : "down");
+  set("mac", s.net.mac);
+  set("rx", num(s.net.rx_frames) + " (" + bytes(s.net.rx_bytes) + ")");
+  set("tx", num(s.net.tx_frames) + " (" + bytes(s.net.tx_bytes) + ")");
+  set("neterr", num(s.net.rx_errors) + " / " + num(s.net.tx_dropped));
+  $("neterr").className = (s.net.rx_errors || s.net.tx_dropped) ? "alert" : "";
+  set("reqs", num(s.http.requests));
+
+  const rows = s.tasks.map((t, i) => {
+    const before = p && p.tasks[i] ? p.tasks[i] : null;
+    const cpu = before && seconds > 0 ? (100 * (t.cpu_total - before.cpu_total) / (s.instant - p.instant)).toFixed(1) + " %" : "—";
+    const use = t.limit_effective ? (100 * t.cpu_period_max / t.limit_effective).toFixed(0) + " %" : "—";
+    const limit = time(t.limit_effective) + (t.limit_effective !== t.limit_declared ? " (from " + time(t.limit_declared) + ")" : "");
+    const r = t.response;
+    const resp = r.count ? [time(r.min), time(avg(r)), time(r.max)].join(" / ") : "no data";
+    let cls = "";
+    if (t.state === 5) { cls = "bad"; failed = true; }
+    else if (t.state === 4) cls = "warn";
+    if (before && t.overruns > before.overruns) reasons.push("limit overrun in " + t.name);
+    if (before && t.unfinished > before.unfinished) reasons.push("unfinished activation in " + t.name);
+    const fault = t.state === 5 ? ' title="fault at ' + esc(t.fault.address) + ", pc " + esc(t.fault.pc) + '"' : "";
+    return "<tr><td>" + esc(t.name) + (t.realtime ? '<span class="rt">RT</span>' : "") + "</td><td><span class=\"state " + cls + "\"" + fault + ">" + STATES[t.state] +
+      "</span></td><td>" + t.priority + "</td><td>" + time(t.period) + "</td><td>" + limit + "</td><td>" + use +
+      "</td><td>" + cpu + "</td><td>" + num(t.activations) + "</td><td>" + num(t.completions) +
+      "</td><td class=\"" + (t.overruns ? "alert" : "") + "\">" + num(t.overruns) +
+      "</td><td class=\"" + (t.unfinished ? "alert" : "") + "\">" + num(t.unfinished) +
+      "</td><td>" + resp + "</td><td>" + (r.worst ? time(r.worst) : "no data") + "</td></tr>";
+  });
+  $("tasks").innerHTML = rows.join("") || "<tr><td colspan=\"13\">no tasks</td></tr>";
+
+  const badge = $("status");
+  if (failed) { badge.textContent = "Failure"; badge.className = "badge bad"; reasons.unshift("process terminated by fault"); }
+  else if (reasons.length) { badge.textContent = "Warning"; badge.className = "badge warn"; }
+  else { badge.textContent = "Normal"; badge.className = "badge ok"; }
+  set("reason", [...new Set(reasons)].join(" · "));
+  previous = s;
+}
+
+function freshness() {
+  const el = $("fresh");
+  if (!lastOk) { el.textContent = "no data"; return; }
+  const age = (Date.now() - lastOk) / 1000;
+  if (age > 3 * PERIOD_MS / 1000) { el.textContent = "stale data: no response for " + age.toFixed(0) + " s"; el.className = "stale"; }
+  else { el.textContent = "updated every " + (PERIOD_MS / 1000) + " s"; el.className = ""; }
+}
+
+async function poll() {
+  try {
+    const response = await fetch("/api/stats", { cache: "no-store" });
+    if (response.ok) {
+      const s = await response.json();
+      if (bootSeen && s.boot !== bootSeen) previous = null;   /* the system rebooted */
+      bootSeen = s.boot;
+      render(s); lastOk = Date.now();
+    }
+  } catch (e) { /* the system did not answer; the data age shows on screen */ }
+  freshness();
+}
+
+/* ---- configuration -------------------------------------------------- */
+const cfg = { loaded: false, data: null, processes: [] };
+
+function timeParts(us) {
+  if (us % 1000000 === 0) return [us / 1000000, "s"];
+  if (us % 1000 === 0) return [us / 1000, "ms"];
+  return [us, "us"];
+}
+const UNIT_US = { us: 1, ms: 1000, s: 1000000 };
+
+const HELP = {
+  name: ["Process name", "<p>Identifies the process in the manifest, on the statistics page and in the console. Lowercase letters, digits, <code>-</code> and <code>_</code>, up to 15 characters; it must be unique.</p><p>Changing the name creates a different process; the program behind it is the same.</p>"],
+  program: ["Program", "<p>The application the process runs: a <code>.BIN</code> file in the root of the SD card, installed from an <code>.rpkg</code> package. <b>Choose…</b> lists the programs found on the card.</p><p>Whether the process is real-time is not a choice made here: it is declared by the program itself, in its package. The <span class=\"rt\">RT</span> mark shows it. Real-time processes run before every other process, whatever their priority.</p>"],
+  argument: ["Argument", "<p>A whole number handed to the program when it starts, with a meaning the program defines. The PWM modulator, for example, reads the pin and the duty cycle from it.</p><p>Leave 0 when the program documents no argument.</p>"],
+  priority: ["Priority", "<p>Decides who runs when more than one process is ready: the larger number runs first. 0 to 255.</p><p>Priority never crosses the real-time boundary: a real-time process always runs before a standard one, so the priority only orders processes of the same kind.</p>"],
+  period: ["Period", "<p>How often the process is activated. At the start of every period the process runs again from where it waited; a process that has not finished when its next period begins is counted as <i>unfinished</i>.</p><p>Activations happen at absolute instants of the system counter, so a late period never shifts the following ones. For a software PWM this period is the PWM period.</p>"],
+  limit: ["CPU time limit per period", "<p>The CPU time the process may use within each period. When it is reached the kernel suspends the process until the next period and counts an <i>overrun</i>; the other processes are not affected.</p><p>The limit also sizes the contracted load: if the limits of all processes add up to more than 95 % of the core, the kernel scales them down proportionally at boot. The percentage shown next to the label is this process's share of its period.</p>"],
+  floor: ["Floor", "<p>The smallest CPU time limit the load scaling may leave to the system process. If the limits of all processes add up to more than 95 % of the core, the kernel scales them down proportionally; the system process is never reduced below this floor, and what the floor preserves is taken from the other processes.</p><p>Set it to the time the system needs to keep the card, the network and this interface working. Apps have no floor: only the system process is a system task.</p>"],
+  core: ["Dedicated core", "<p>A real-time process does not compete for the CPU: it is given a whole core of its own, with no scheduler, no tick and no interrupts, and it owns that core's time. Cores 1 to 3 can be dedicated; core 0 always belongs to the system.</p><p><b>Provisional:</b> dedicated cores are not implemented yet. Until they are, a real-time process runs on core 0 ahead of every standard process, limited to half of its period so that the system keeps running. The core chosen here is recorded in the manifest and takes effect when the dedicated cores arrive.</p>"],
+  stack: ["Stack", "<p>Memory reserved for the program's stack, in pages of 4 KiB. It is fixed when the process is created and cannot grow.</p><p>4 pages (16 KiB) suit simple programs; a program with deep call chains or large local variables needs more. A program that runs past its stack is terminated by a fault.</p>"],
+  devices: ["Devices", "<p>Hardware the process may use directly, with its registers mapped into the process's own memory: no kernel call is needed to drive them.</p><p>A device belongs to one process only. The ones greyed out are owned by the system process (the SD card and the Ethernet controller).</p>"],
+  dma: ["DMA memory", "<p>A block of memory, without cache, that the process shares with the devices it drives: network frames, samples, buffers. The process learns its physical address from the kernel.</p><p>Leave <i>none</i> for programs that only read and write registers, such as the PWM modulator.</p>"],
+};
+
+function field(label, control, key, live) {
+  const h = HELP[key];
+  const btn = h ? '<button type="button" class="help" data-help="' + key + '" aria-label="About ' + esc(h[0]) + '" aria-expanded="false">?</button>' : "";
+  return '<div class="field"><label>' + label + btn + (live ? '<span class="live" data-live="' + live + '"></span>' : "") + "</label>" + control + "</div>";
+}
+
+function toggleHelp(button) {
+  const open = button.getAttribute("aria-expanded") === "true";
+  closeHelp();
+  if (open) return;
+  const h = HELP[button.dataset.help];
+  button.setAttribute("aria-expanded", "true");
+  button.parentElement.insertAdjacentHTML("beforeend", '<div class="pop" role="tooltip"><b>' + esc(h[0]) + "</b>" + h[1] + "</div>");
+}
+function closeHelp() {
+  document.querySelectorAll(".pop").forEach((p) => p.remove());
+  document.querySelectorAll(".help[aria-expanded=true]").forEach((b) => b.setAttribute("aria-expanded", "false"));
+}
+document.addEventListener("click", (e) => {
+  const b = e.target.closest(".help");
+  if (b) { e.preventDefault(); toggleHelp(b); return; }
+  if (!e.target.closest(".pop")) closeHelp();
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeHelp(); });
+function select(name, options, value, extra) {
+  return '<select name="' + name + '"' + (extra || "") + ">" +
+    options.map((o) => '<option value="' + esc(o[0]) + '"' + (String(o[0]) === String(value) ? " selected" : "") + ">" + esc(o[1]) + "</option>").join("") + "</select>";
+}
+function timeInput(name, us, extra) {
+  const [v, u] = timeParts(us);
+  return '<div class="unit"><input type="number" name="' + name + '" min="1" step="1" value="' + v + '"' + (extra || "") + ">" +
+    select(name + "_unit", [["us", "µs"], ["ms", "ms"], ["s", "s"]], u, extra) + "</div>";
+}
+
+function processCard(p, index) {
+  const sys = p.name === "system";
+  const d = cfg.data;
+  const owned = new Set(["ethernet", "sdcard"]);        /* devices the system process owns */
+  const dma = p.dma.length ? p.dma[0].kib : 0;
+  let html = '<div class="card process" data-index="' + index + '"><div class="head">' +
+    "<h3>" + (sys ? "system" : esc(p.name || "new process")) + "</h3>" +
+    (sys ? '<span class="tag">boot set: card, network, web interface</span>' : '<span class="tag">program ' + esc(p.program) + "</span>") +
+    (!sys && (programInfo(p.program) || {}).realtime ? '<span class="tag">real-time · dedicated core (provisional: core 0, ahead of all)</span>' : "") +
+    '<span class="spacer"></span>' + (sys ? "" : '<button class="danger" data-remove="' + index + '">Remove</button>') + "</div>";
+  html += '<div class="fields">';
+  if (!sys) {
+    html += field("Name", '<input type="text" name="name" value="' + esc(p.name) + '" maxlength="15" spellcheck="false">', "name");
+    html += field("Program", programPicker(p.program, index), "program");
+    html += field("Argument", '<input type="number" name="argument" min="0" step="1" value="' + p.argument + '">', "argument");
+  }
+  const rt = !sys && !!(programInfo(p.program) || {}).realtime;
+  if (rt) {
+    html += field("Dedicated core", select("core", [[1, "core 1"], [2, "core 2"], [3, "core 3"]], p.core || 1), "core");
+    html += field("Period", timeInput("period", p.period_us), "period");
+  } else {
+    html += field("Priority", '<input type="number" name="priority" min="0" max="255" step="1" value="' + p.priority + '">', "priority");
+    html += field("Period", timeInput("period", p.period_us), "period");
+    html += field("CPU limit", timeInput("limit", p.limit_us), "limit", "use-" + index);
+    /* Only the system process is a system task; an app cannot declare itself one, so it sees no such field. */
+    if (sys) html += field("Floor", timeInput("floor", p.floor_us), "floor");
+  }
+  if (!sys) {
+    html += field("Stack", select("stack", STACKS.map((s) => [s, s + " pages (" + s * 4 + " KiB)"]), p.stack_pages), "stack");
+    html += field("Devices", '<div class="checks">' + d.devices.map((n) => {
+      const off = owned.has(n);
+      return '<label class="' + (off ? "off" : "") + '" title="' + (off ? "owned by the system process" : "") + '"><input type="checkbox" name="device" value="' + esc(n) + '"' +
+        (p.devices.includes(n) ? " checked" : "") + (off ? " disabled" : "") + "> " + esc(n) + "</label>";
+    }).join("") + "</div>", "devices");
+    html += field("DMA memory", select("dma", DMA_SIZES.map((k) => [k, k ? (k >= 1024 ? k / 1024 + " MiB" : k + " KiB") : "none"]), dma), "dma");
+  }
+  html += "</div></div>";
+  return html;
+}
+
+function programInfo(name) { return (cfg.data.programs || []).find((q) => q.name === name) || null; }
+
+function programPicker(name, index) {
+  const q = programInfo(name);
+  const label = q ? '<b>' + esc(q.name) + "</b>" + (q.realtime ? '<span class="rt">RT</span>' : "") + "<small>" + esc(q.description || q.file) + "</small>"
+                  : '<b class="alert">' + esc(name || "none") + "</b><small>not on the card</small>";
+  return '<div class="pick"><div class="chosen">' + label + '</div><button type="button" class="ghost" data-pick="' + index + '">Choose…</button>' +
+         '<input type="hidden" name="program" value="' + esc(name) + '"></div>';
+}
+
+function pickProgram(onChosen) {
+  const list = cfg.data.programs || [];
+  const items = list.map((q, i) => '<li data-i="' + i + '" class="' + (q.valid ? "" : "off") + '"><b>' + esc(q.name) + "</b>" +
+    (q.realtime ? '<span class="rt">RT</span>' : "") + "<small>" + esc(q.valid ? (q.description || "no description") : "not an RTR-OS program") +
+    " · " + esc(q.file) + " · " + bytes(q.size) + "</small></li>").join("");
+  overlay("Choose a program", list.length ? "Programs found on the SD card. RT marks the ones written for real-time scheduling." : "No program files (.BIN) were found on the SD card.", [["Cancel", "ghost", closeOverlay]]);
+  $("ov-text").insertAdjacentHTML("afterend", '<ul class="lookup">' + items + "</ul>");
+  document.querySelector(".overlay .box").classList.add("wide");
+  document.querySelectorAll(".lookup li").forEach((li) => li.addEventListener("click", () => {
+    const q = list[Number(li.dataset.i)];
+    if (!q.valid) return;
+    closeOverlay(); onChosen(q);
+  }));
+}
+
+function readForm() {
+  const out = [];
+  document.querySelectorAll(".process").forEach((card) => {
+    const g = (n) => card.querySelector('[name="' + n + '"]');
+    const t = (n) => Math.round(Number(g(n).value) * UNIT_US[g(n + "_unit").value]);
+    const sys = card.querySelector("h3").textContent === "system" && !g("name");
+    const rt = !sys && !!(programInfo(g("program").value) || {}).realtime;
+    const p = {
+      name: sys ? "system" : g("name").value.trim(),
+      program: sys ? "system" : g("program").value,
+      argument: sys ? 0 : Math.max(0, Math.round(Number(g("argument").value) || 0)),
+      priority: rt ? 255 : Math.round(Number(g("priority").value) || 0),
+      realtime: rt ? 1 : 0,
+      core: rt ? Number(g("core").value) : 0,
+      period_us: t("period"), limit_us: rt ? Math.floor(t("period") / 2) : t("limit"),
+      system: sys ? 1 : 0,
+      floor_us: sys ? t("floor") : 0,
+      stack_pages: sys ? 16 : Number(g("stack").value),
+      devices: sys ? [] : [...card.querySelectorAll('[name="device"]:checked')].map((c) => c.value),
+      dma: [], card,
+    };
+    if (!sys && Number(g("dma").value)) p.dma = [{ name: "buffers", kib: Number(g("dma").value) }];
+    out.push(p);
+  });
+  return out;
+}
+
+function validate(list) {
+  const errors = [];
+  const names = new Set();
+  const devices = new Set();
+  let load = 0;
+  list.forEach((p) => {
+    const who = p.name || "unnamed process";
+    if (p.name !== "system" && !NAME_RULE.test(p.name)) errors.push(who + ": invalid name");
+    if (names.has(p.name)) errors.push(who + ": duplicated name");
+    names.add(p.name);
+    if (!(p.period_us > 0)) errors.push(who + ": period must be positive");
+    if (!p.realtime && !(p.limit_us > 0)) errors.push(who + ": limit must be positive");
+    if (!p.realtime && p.limit_us > p.period_us) errors.push(who + ": limit above period");
+    if (p.system && p.floor_us > p.limit_us) errors.push(who + ": floor above limit");
+    if (p.priority < 0 || p.priority > 255) errors.push(who + ": priority out of range");
+    if (p.name !== "system") {
+      const q = programInfo(p.program);
+      if (!q || !q.valid) errors.push(who + ": program not on the card");
+    }
+    p.devices.forEach((d) => { if (devices.has(d)) errors.push(who + ": device " + d + " already assigned"); devices.add(d); });
+    if (p.period_us > 0) load += p.limit_us / p.period_us;
+    const use = p.card.querySelector("[data-live]");
+    if (use) use.textContent = p.period_us > 0 ? (100 * p.limit_us / p.period_us).toFixed(1) + " % of period" : "";
+  });
+  if (list.length > 7) errors.push("at most 7 processes");
+  return { errors, load };
+}
+
+function tUnit(us) { const [v, u] = timeParts(us); return v + " " + u; }
+function toManifest(list) {
+  let text = "# RTR-OS manifest\nversion 1\n";
+  list.forEach((p) => {
+    const sys = p.name === "system";
+    text += "\nprocess " + p.name + "\n";
+    if (!sys) text += "  program " + p.program + "\n  argument " + p.argument + "\n";
+    if (p.realtime) {
+      text += "  core " + p.core + "\n  period " + tUnit(p.period_us) + "\n";
+    } else {
+      text += "  priority " + p.priority + "\n  period " + tUnit(p.period_us) + "\n  limit " + tUnit(p.limit_us) + "\n";
+      text += "  system " + (p.system ? "yes" : "no") + "\n";
+      if (p.system) text += "  floor " + tUnit(p.floor_us) + "\n";
+    }
+    if (!sys) {
+      text += "  stack " + p.stack_pages + "\n";
+      p.devices.forEach((d) => { text += "  device " + d + "\n"; });
+      p.dma.forEach((m) => { text += "  dma " + m.name + " " + m.kib + " KiB\n"; });
+    }
+    text += "end\n";
+  });
+  return text;
+}
+
+function refresh() {
+  const list = readForm();
+  const { errors, load } = validate(list);
+  const d = cfg.data;
+  $("cfg-text").value = toManifest(list);
+  let note = "contracted load " + (100 * load).toFixed(1) + " %" + (load > 0.95 ? " — above 95 %, the kernel will scale the limits down" : "");
+  if (errors.length) note = errors[0] + (errors.length > 1 ? " (+" + (errors.length - 1) + " more)" : "");
+  $("cfg-note").textContent = note;
+  $("cfg-note").className = "note" + (errors.length ? " alert" : "");
+  $("cfg-save").disabled = errors.length > 0 || !d.writable || d.reboot_pending;
+}
+
+function renderConfig() {
+  const d = cfg.data;
+  const banner = $("cfg-banner");
+  banner.hidden = false;
+  if (d.reboot_pending) { banner.className = "banner ok"; banner.textContent = "A new manifest was saved; the board is rebooting."; }
+  else if (!d.valid) { banner.className = "banner bad"; banner.textContent = "The manifest on the card was rejected at line " + d.error_line + ": " + d.error + ". The installation did not start. Fix the text below and save."; }
+  else if (d.source === "default") { banner.className = "banner"; banner.textContent = "No usable SD card: the built-in defaults are running and changes cannot be saved."; }
+  else if (d.source === "created") { banner.className = "banner"; banner.textContent = "The card had no manifest; the default one was written to it."; }
+  else banner.hidden = true;
+
+  const host = $("cfg-processes");
+  if (!d.valid) {
+    host.innerHTML = "";
+    $("cfg-text").readOnly = false;
+    $("cfg-text").value = d.text;
+    $("cfg-add").disabled = true;
+    $("cfg-save").disabled = !d.writable;
+    $("cfg-note").textContent = "editing the manifest text directly";
+    document.querySelector("details").open = true;
+    return;
+  }
+  $("cfg-text").readOnly = true;
+  $("cfg-add").disabled = false;
+  host.innerHTML = cfg.processes.map(processCard).join("");
+  host.querySelectorAll("[data-remove]").forEach((b) => b.addEventListener("click", () => {
+    cfg.processes = readForm().map(stripCard);
+    cfg.processes.splice(Number(b.dataset.remove), 1);
+    renderConfig();
+  }));
+  host.querySelectorAll("[data-pick]").forEach((b) => b.addEventListener("click", () => {
+    const index = Number(b.dataset.pick);
+    pickProgram((q) => {
+      cfg.processes = readForm().map(stripCard);
+      cfg.processes[index].program = q.name;
+      cfg.processes[index].realtime = q.realtime ? 1 : 0;
+      renderConfig();
+    });
+  }));
+  host.addEventListener("input", refresh);
+  refresh();
+}
+const stripCard = (p) => { const q = { ...p }; delete q.card; return q; };
+
+async function loadConfig() {
+  try {
+    const r = await fetch("/api/config", { cache: "no-store" });
+    if (!r.ok) throw new Error(r.status);
+    cfg.data = await r.json();
+    cfg.processes = cfg.data.processes.map((p) => ({ ...p }));
+    cfg.loaded = true;
+    renderConfig();
+  } catch (e) {
+    $("cfg-banner").hidden = false;
+    $("cfg-banner").className = "banner bad";
+    $("cfg-banner").textContent = "The configuration could not be read: " + e.message;
+  }
+}
+
+$("cfg-add").addEventListener("click", () => pickProgram((q) => {
+  cfg.processes = readForm().map(stripCard);
+  let name = q.name, n = 2;
+  while (cfg.processes.some((p) => p.name === name)) name = q.name.slice(0, 13) + n++;
+  cfg.processes.push({ name, program: q.name, argument: 0, priority: 1, realtime: q.realtime ? 1 : 0, core: 1,
+    period_us: 100000, limit_us: 10000, floor_us: 0, system: 0, stack_pages: 4, devices: [], dma: [] });
+  renderConfig();
+}));
+$("cfg-reload").addEventListener("click", () => { cfg.loaded = false; loadConfig(); });
+
+/* ---- application packages ------------------------------------------ */
+$("cfg-install").addEventListener("click", () => $("cfg-file").click());
+$("cfg-file").addEventListener("change", async () => {
+  const file = $("cfg-file").files[0];
+  $("cfg-file").value = "";
+  if (!file) return;
+  if (!cfg.data || !cfg.data.writable) { overlay("Cannot install", "There is no writable SD card.", [["Close", "primary", closeOverlay]]); return; }
+  overlay('<span class="spin"></span>Installing ' + esc(file.name), "Uploading the package and writing its files to the card…", []);
+  try {
+    const r = await fetch("/api/packages", { method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: file });
+    const j = await r.json();
+    if (!r.ok) { overlay("Not installed", j.error, [["Close", "primary", closeOverlay]]); return; }
+    overlay("Installed", "Files written to the card: " + j.files + ". The programs can now be chosen for a process.", [["Close", "primary", closeOverlay]]);
+    const pending = readForm().map(stripCard);
+    const r2 = await fetch("/api/config", { cache: "no-store" });
+    if (r2.ok) { cfg.data = await r2.json(); cfg.processes = pending; renderConfig(); }
+  } catch (e) { overlay("Not installed", "The system did not answer: " + e.message, [["Close", "primary", closeOverlay]]); }
+});
+
+function overlay(title, text, actions) {
+  $("ov-title").innerHTML = title; $("ov-text").textContent = text;
+  $("ov-actions").innerHTML = "";
+  actions.forEach(([label, cls, fn]) => {
+    const b = document.createElement("button"); b.className = cls; b.textContent = label; b.addEventListener("click", fn);
+    $("ov-actions").appendChild(b);
+  });
+  $("overlay").hidden = false;
+}
+const closeOverlay = () => { $("overlay").hidden = true; document.querySelector(".overlay .box").classList.remove("wide"); const l = document.querySelector(".lookup"); if (l) l.remove(); };
+
+$("cfg-save").addEventListener("click", () => {
+  overlay("Save and reboot?", "The manifest will be written to the SD card and the board will reboot. The web interface comes back when the system is up again.",
+    [["Cancel", "ghost", closeOverlay], ["Save and reboot", "primary", saveConfig]]);
+});
+
+async function saveConfig() {
+  const text = $("cfg-text").value;
+  overlay('<span class="spin"></span>Saving', "Writing the manifest to the card…", []);
+  try {
+    const r = await fetch("/api/config", { method: "POST", headers: { "Content-Type": "text/plain" }, body: text });
+    const j = await r.json();
+    if (!r.ok) { overlay("Not saved", j.error + (j.line ? " (line " + j.line + ")" : ""), [["Close", "primary", closeOverlay]]); return; }
+  } catch (e) { overlay("Not saved", "The system did not answer: " + e.message, [["Close", "primary", closeOverlay]]); return; }
+  overlay('<span class="spin"></span>Rebooting', "Waiting for the system to come back…", []);
+  const oldBoot = bootSeen;
+  const started = Date.now();
+  const wait = async () => {
+    try {
+      const r = await fetch("/api/stats", { cache: "no-store" });
+      if (r.ok) { const s = await r.json(); if (s.boot !== oldBoot) { location.reload(); return; } }
+    } catch (e) { /* still rebooting */ }
+    if (Date.now() - started > 120000) { overlay("Still waiting", "The system has not come back after two minutes. Check the serial console.", [["Reload", "primary", () => location.reload()]]); return; }
+    setTimeout(wait, 1000);
+  };
+  setTimeout(wait, 2000);
+}
+
+/* ---- start ---------------------------------------------------------- */
+poll();
+setInterval(poll, PERIOD_MS);
+showTab(location.hash === "#config" ? "config" : "stats");
+</script>
+</body>
+</html>

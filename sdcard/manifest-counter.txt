@@ -1,0 +1,20 @@
+# RTR-OS manifest - example: a 16-bit binary counter on GPIO 4 to 19, one
+# increment per millisecond, for exercising the bench (argument = first << 8 | width).
+version 1
+
+process system
+  priority 4
+  period 1 ms
+  limit 800 us
+  system yes
+  floor 400 us
+end
+
+process counter
+  program counter
+  argument 1040
+  core 1
+  period 1 ms
+  stack 4
+  device gpio
+end

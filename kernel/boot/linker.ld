@@ -1,8 +1,8 @@
 /*
- * RTR-OS - layout da imagem. O firmware do Pi 4 carrega kernel8.img em 0x80000.
+ * RTR-OS - image layout. The Pi 4 firmware loads kernel8.img at 0x80000.
  *
- * As seções são alinhadas a página porque cada uma recebe uma permissão
- * diferente na tabela de tradução (kernel/core/mmu.c).
+ * Sections are page aligned because each one gets its own permission in the
+ * translation table (kernel/core/mmu.c).
  */
 
 ENTRY(_start)

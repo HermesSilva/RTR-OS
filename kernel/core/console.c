@@ -1,11 +1,11 @@
-/* RTR-OS - console de depuração do kernel, sobre a UART0. */
+/* RTR-OS - kernel debug console, over UART0. */
 #include "console.h"
 
 #include <stddef.h>
 
 #include "board.h"
 
-#define DEC_DIGITS_MAX  20U             /* 2^64 - 1 tem 20 dígitos decimais */
+#define DEC_DIGITS_MAX  20U             /* 2^64 - 1 has 20 decimal digits */
 #define HEX_DIGITS      16U
 
 static uint32_t dropped;

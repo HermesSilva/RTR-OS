@@ -1,207 +1,242 @@
 # RTR-OS — Real-time Raspberry Operating System
 
-Sistema operacional de tempo real para o **Raspberry Pi 4 Model B**, escrito em C, voltado a controle e automação.
+A real-time operating system for the **Raspberry Pi 4 Model B**, written in C, aimed at control and automation.
 
-O RTR-OS parte de duas ideias:
+RTR-OS starts from two ideas:
 
-- **O sistema é síncrono.** Todos os núcleos leem o mesmo contador de hardware, movido pelo cristal da placa. Os instantes são sempre absolutos, de modo que um atraso em um ciclo nunca se acumula no seguinte.
-- **O núcleo de processador é a unidade de garantia.** Um processo pode receber um núcleo inteiro, sem escalonador, sem tick e sem nenhuma interrupção, e rodar nele em tempo real. Os demais núcleos trabalham em concorrência, por prioridade fixa com limite de tempo imposto pelo kernel.
+- **The system is synchronous.** All cores read the same hardware counter, driven by the board crystal. Instants are always absolute, so a delay in one cycle never accumulates into the next.
+- **The processor core is the unit of guarantee.** A process can be given a whole core, with no scheduler, no tick and no interrupts at all, and run on it in real time. The other cores work concurrently, under fixed priority with a time limit enforced by the kernel.
 
-O projeto está no início. O que existe hoje é a base do kernel; a seção [Estado atual](#estado-atual) diz exatamente o que funciona e o que ainda não foi verificado.
+The project is at an early stage. The [Current state](#current-state) section says exactly what works and what has not been verified yet.
 
-## Sumário
+## Contents
 
-- [Arquitetura](#arquitetura)
-- [Estado atual](#estado-atual)
-- [Estrutura do repositório](#estrutura-do-repositório)
-- [Ferramentas necessárias](#ferramentas-necessárias)
-- [Compilar](#compilar)
-- [Testar no emulador](#testar-no-emulador)
-- [Rodar na placa](#rodar-na-placa)
-- [Regras de codificação](#regras-de-codificação)
-- [Roteiro](#roteiro)
-- [Documentação](#documentação)
-- [Licença](#licença)
+- [Architecture](#architecture)
+- [Current state](#current-state)
+- [Repository layout](#repository-layout)
+- [Required tools](#required-tools)
+- [Build](#build)
+- [Test in the emulator](#test-in-the-emulator)
+- [Run on the board](#run-on-the-board)
+- [Coding rules](#coding-rules)
+- [Roadmap](#roadmap)
+- [Documentation](#documentation)
+- [License](#license)
 
-## Arquitetura
+## Architecture
 
-O desenho completo, com o motivo de cada escolha, está em [`docs/PLANO.md`](docs/PLANO.md). Em resumo:
+The full design, with the reason behind each choice, is in [`docs/PLANO.md`](docs/PLANO.md) (in Portuguese, the language of the planning discussion). In short:
 
-| Tema | Decisão |
-|------|---------|
-| Núcleos | O núcleo 0 é do kernel e do sistema. Cada um dos núcleos 1 a 3 pode ser **dedicado** a um processo ou **compartilhado** entre tarefas. A alocação é fixada no boot |
-| Núcleo dedicado | O processo roda isolado (EL0), em um núcleo que não recebe nenhuma interrupção em operação normal. Ele lê o contador e acessa os próprios dispositivos direto, sem entrar no kernel. Outro núcleo o supervisiona por batimento |
-| Núcleos compartilhados | Prioridade fixa com preempção. Toda tarefa tem um limite de tempo de CPU por período; quem estoura é suspenso até o período seguinte. Se a soma dos limites passa de 100%, o sistema faz um rateio |
-| Isolamento | Kernel em EL1, processos em EL0, cada um com o próprio espaço de endereçamento. As permissões são uma tabela fixa, aplicada no boot |
-| Drivers | Ficam nos processos. No kernel, apenas o timer, o controlador de interrupções e um console de depuração |
-| Comunicação | Canais de memória compartilhada sem trava, criados pelo kernel. O processo de tempo real nunca espera |
-| Programas | Arquivos no cartão SD, carregados pelo sistema conforme um manifesto lido no boot |
-| Observabilidade | O kernel oferece uma interface para qualquer processo empurrar dados e outra para lê-los, além de uma interface de parâmetros no sentido inverso |
-| Interface web | Servida pela própria placa, por Ethernet, por processos de núcleo compartilhado. É por ela que o sistema é operado e monitorado |
+| Topic | Decision |
+|-------|----------|
+| Cores | Core 0 belongs to the kernel and the system. Each of cores 1 to 3 can be **dedicated** to one process or **shared** among tasks. The allocation is fixed at boot |
+| Dedicated core | The process runs isolated (EL0) on a core that receives no interrupts in normal operation. It reads the counter and accesses its own devices directly, without entering the kernel. Another core supervises it through a heartbeat |
+| Shared cores | Fixed priority with preemption. Every task has a CPU time limit per period; one that exceeds it is suspended until the next period. If the limits add up to more than 100%, the system scales them down |
+| Isolation | Kernel in EL1, processes in EL0, each in its own address space. Permissions are a fixed table, applied at boot |
+| Drivers | Live in processes. The kernel keeps only the timer, the interrupt controller and a debug console |
+| Communication | Lock-free shared-memory channels, created by the kernel. The real-time process never waits |
+| Programs | Files on the SD card, loaded by the system according to a manifest read at boot |
+| Observability | The kernel offers one interface for any process to push data and another to read it, plus a parameter interface in the opposite direction |
+| Web interface | Served by the board itself, over Ethernet, by shared-core processes. It is how the system is operated and monitored |
 
-## Estado atual
+## Current state
 
-Etapas 0 e 1 do plano, implementadas e verificadas **no emulador**. Nenhuma delas foi verificada na placa física ainda.
+Stages 0 to 5 of the plan, implemented and verified **in the emulator**: the system comes up and the statistics page opens in the browser. Nothing has been verified on the physical board yet.
 
-O kernel hoje:
+The system today:
 
-- dá boot em EL1 e inicializa o console serial (UART0, 115200 8N1);
-- liga a MMU e as caches, com permissões por seção: código só para leitura e execução, constantes só para leitura, dados sem execução, periféricos sem cache;
-- inicializa o controlador de interrupções (GIC-400) e o timer, que interrompe 1000 vezes por segundo em instantes absolutos;
-- mede, pelo contador do sistema, o atraso entre o instante programado e a entrada do tratador, e relata no console a cada segundo;
-- para com um relato no console diante de qualquer exceção inesperada.
+- boots in EL1, initializes the serial console (UART0, 115200 8N1) and turns on the MMU and the caches, with per-section permissions;
+- runs isolated processes in EL0, each in its own address space, loaded from programs embedded in the image;
+- schedules by fixed priority with preemption, with a time limit per period and scaling when the declared load exceeds the ceiling;
+- terminates a process that faults and contains one that overruns its limit, without affecting the others;
+- gives a process the registers of a device and memory to exchange data with it;
+- starts a single built-in process, `system` (the boot set), which owns the SD card and the Ethernet controller;
+- reads the installation manifest, `MANIFEST.TXT`, from the SD card (writing the default one if the card has none), asks the kernel to create the processes it describes and seals the installation;
+- runs the network stack (lwIP) and a web server in the `system` process, with its own Ethernet driver;
+- serves a web interface with two tabs: **Statistics** (measured by the kernel, also as JSON at `/api/stats`) and **Configuration**, which edits everything the manifest holds and, on save, writes it to the card and reboots the board. Three themes: light, dark and amber.
 
-Saída típica no console:
+To see it working:
 
-```text
-RTR-OS - Real-time Raspberry Operating System
-CPU 0 em EL1, contador a 54000000 Hz, dtb em 0x...
-MMU e caches ligados
-timer a 1000 interrupcoes por segundo
-tempo 1 s | disparos 1000 | atraso em ns: min ..., med ..., max ..., pior ... | pulados 0 | irqs sem tratador 0 | console perdeu 0
+```powershell
+scripts\build.ps1
+wsl -d Ubuntu -- bash /mnt/d/Tootega/Source/RTR-SO/scripts/make-sd-image.sh   # once: card image for the emulator
+scripts\run-web.ps1        # then open http://localhost:8080/
 ```
 
-No emulador, a frequência do contador aparece como 62500000 Hz; na placa, o esperado é 54000000 Hz.
+Applications are installed from the browser as `.rpkg` packages ("Install app" in the Configuration tab): the package is unpacked onto the card. The build produces one package per program in `build\` (`pwm.rpkg`, for instance); `tools\rpkg\make-rpkg.py` builds packages with any set of files. Programs are `.BIN` files on the card; the only program inside the kernel image is the boot set. Each program's header says whether it was written for real-time scheduling (`REALTIME` in `rtr_add_program`), and the manifest gives each process a class, `realtime` or `standard`: real-time processes run before every standard one, and a program without the flag cannot be given the real-time class. The Configuration tab lists the programs found on the card when a process is added.
 
-O que **não** existe ainda: processos, escalonador, múltiplos núcleos, rede, interface web, leitura do cartão SD. Veja o [Roteiro](#roteiro).
+What does **not** exist yet: interrupt delivery to processes, multiple cores, the dedicated core, channels. See the [Roadmap](#roadmap).
 
-## Estrutura do repositório
+## Repository layout
 
 ```text
 kernel/
-  boot/       entrada em assembly, vetores de exceção, script do linker
-  board/      dispositivos da placa usados pelo kernel: UART, GIC
-  core/       console, MMU, timer, tratamento de interrupções, parada por falha
-  include/    cabeçalhos; arch.h concentra o acesso ao processador
-cmake/        configuração da compilação cruzada
-scripts/      compilar, testar no emulador, montar o cartão SD
-sdcard/       config.txt do firmware da placa
-docs/         plano do projeto e requisitos
+  boot/       assembly entry, exception vectors and context switch, embedded programs
+  board/      board devices used by the kernel: UART, GIC
+  core/       scheduler, processes, MMU, timer, system calls, console
+  include/    headers; arch.h concentrates processor access
+abi/          interface between the kernel and the programs
+user/
+  lib/        program startup, system calls, part of the C library
+  demo/       console report and test program (standard class)
+  pulse/      periodic job with bounded work (real-time class)
+  pwm/        software PWM on a GPIO pin (real-time class)
+tools/
+  qemu-pi4/   rtr-scope, the GPIO capture device added to the emulator
+  rpkg/       application package builder
+  scope/      the virtual oscilloscope
+  system/     the boot set: SD card driver, FAT32, manifest, Ethernet driver, lwIP port, web server, page
+cmake/        cross-compilation setup
+scripts/      build, emulator tests, SD card assembly
+sdcard/       config.txt for the board firmware
+docs/         project plan and requirements
 ```
 
-## Ferramentas necessárias
+## Required tools
 
-O desenvolvimento é feito no Windows, com PowerShell 7.
+Development is done on Windows, with PowerShell 7.
 
-| Ferramenta | Uso | Instalação |
-|------------|-----|------------|
-| LLVM (clang, lld, clang-tidy) | Compilação cruzada para AArch64 e análise estática | `winget install LLVM.LLVM` |
-| CMake e Ninja | Sistema de build | `winget install Kitware.CMake Ninja-build.Ninja` |
-| QEMU 9.0 ou mais novo | Emulação do Raspberry Pi 4 (`raspi4b`) | `winget install SoftwareFreedomConservancy.QEMU` |
+| Tool | Use | Install |
+|------|-----|---------|
+| LLVM (clang, lld, clang-tidy) | AArch64 cross compilation and static analysis | `winget install LLVM.LLVM` |
+| CMake and Ninja | Build system | `winget install Kitware.CMake Ninja-build.Ninja` |
+| QEMU 9.0 or newer | Raspberry Pi 4 emulation (`raspi4b`) | `winget install SoftwareFreedomConservancy.QEMU` |
+| WSL with Ubuntu | Building and running qemu-pi4, the emulator with networking | `wsl --install -d Ubuntu` |
 
-Os scripts procuram o LLVM em `C:\Program Files\LLVM\bin` e o QEMU em `C:\Program Files\qemu` quando eles não estão no `PATH`.
+The scripts look for LLVM in `C:\Program Files\LLVM\bin` and QEMU in `C:\Program Files\qemu` when they are not on the `PATH`.
 
-Para rodar na placa:
+To run on the board:
 
-- Raspberry Pi 4 Model B e fonte;
-- cartão microSD formatado em FAT32;
-- adaptador USB-serial de **3,3 V** (um adaptador de 5 V pode danificar a placa).
+- Raspberry Pi 4 Model B and power supply;
+- microSD card formatted as FAT32;
+- **3.3 V** USB-serial adapter (a 5 V adapter can damage the board).
 
-## Compilar
+## Build
 
 ```powershell
 scripts\build.ps1
 ```
 
-Gera `build\kernel8.img`, a imagem que o firmware da placa carrega, e `build\kernel8.elf`, com símbolos para depuração. A compilação falha diante de qualquer aviso do compilador ou do analisador estático.
+Produces `build\kernel8.img`, the image the board firmware loads, and `build\kernel8.elf`, with symbols for debugging. The build fails on any compiler or static analyzer warning. The first configuration downloads the lwIP stack (version 2.2.1) with git.
 
-## Testar no emulador
+## Test in the emulator
 
-Execução sem interação, com a saída do console mostrada ao final:
+### Emulator with networking: qemu-pi4
 
-```powershell
-scripts\test-qemu.ps1                 # 6 segundos, relógio do Windows
-scripts\test-qemu.ps1 -Virtual        # relógio virtual determinístico
-scripts\test-qemu.ps1 -Seconds 15
-```
-
-Com o relógio do Windows, o emulador entrega as interrupções do timer com 1 a 2 ms de atraso e pula períodos; isso é efeito do agendador do Windows, não do kernel. Com `-Virtual`, o tempo avança pela contagem de instruções e o atraso medido é constante.
-
-Execução interativa, com o console no terminal (para sair: `Ctrl+A` e depois `X`):
+The official QEMU does not emulate the Pi 4 Ethernet controller. For the network stages the project uses [qemu-pi4](https://github.com/kmehltretter82/qemu-pi4), a QEMU 11.1 fork that also emulates the board's Ethernet, USB, GPIO, SPI and PWM. It has no prebuilt binary; it is built once, inside WSL (Ubuntu), without `sudo`:
 
 ```powershell
-scripts\run-qemu.ps1
-scripts\run-qemu.ps1 -Gdb             # espera um depurador em localhost:1234
+wsl -d Ubuntu -- bash /mnt/d/Tootega/Source/RTR-SO/scripts/build-qemu-pi4.sh
 ```
 
-Ensaio de proteção de memória, que compila uma versão do kernel que tenta gravar no próprio código e confere se a MMU barra a escrita:
+The script creates `~/rtr-tools` in WSL with its own build environment (micromamba and conda-forge), the source and the build. After that:
+
+```powershell
+scripts\run-web.ps1               # system up, web interface at http://localhost:8080/, Ctrl+C stops
+scripts\test-qemu-pi4.ps1         # 6 seconds, no interaction, serial console shown at the end
+scripts\test-qemu-pi4.ps1 -Seconds 15
+scripts\screenshot.ps1            # captures the web interface in the three themes (needs Edge)
+```
+
+The emulated SD card is `build/sd.img`, created by `scripts/make-sd-image.sh` (inside WSL; put a `sdcard/manifest.txt` next to it to start from a given manifest). The scripts attach it when it exists. Two more test scripts run inside WSL: `scripts/test-web.sh` requests the page and the JSON, and `scripts/test-config.sh` posts a modified manifest and shows the console across the reboot it triggers.
+
+In this emulator the counter runs at 54000000 Hz, as on the board, and the board gets its address by DHCP (10.0.2.15 inside the emulated network).
+
+### Virtual oscilloscope
+
+The emulator build includes a probe, `rtr-scope`, that records every GPIO transition with its virtual-time instant. `scripts\run-web.ps1 -Scope` runs the system with the probe on; `scripts\scope.ps1` then renders `build\scope.log` into a page with the waveforms, pan and zoom, cursors and, per pin, frequency, duty cycle and period jitter, and opens it in the browser. `scripts\test-scope.sh` (inside WSL) is a complete example: it runs the `pwm` program on GPIO 18 at 1 kHz, 30 % duty, and renders the capture; with an icount shift as second argument (`test-scope.sh 12 3`) the emulator's deterministic clock gives a clean waveform. The oscilloscope shows the logic of the program, not the timing of the real board.
+
+### Official QEMU
+
+Without networking, but with a deterministic virtual clock:
+
+```powershell
+scripts\test-qemu.ps1             # 6 seconds, Windows clock
+scripts\test-qemu.ps1 -Virtual    # deterministic virtual clock
+scripts\run-qemu.ps1              # interactive; to quit: Ctrl+A then X
+scripts\run-qemu.ps1 -Gdb         # waits for a debugger on localhost:1234
+```
+
+With the Windows clock the emulator delivers timer interrupts 1 to 2 ms late and skips periods; that is an effect of the Windows scheduler, not of the kernel. With `-Virtual`, time advances by instruction count and the measured delay is constant.
+
+Memory protection test, which builds a kernel that tries to write to its own code and checks that the MMU blocks the write:
 
 ```powershell
 scripts\test-fault.ps1
 ```
 
-Limites do emulador:
+### Limits of the emulators
 
-- ele valida a lógica, não o tempo; nenhuma medida de latência feita nele vale para a placa;
-- o QEMU não emula o controlador Ethernet do Pi 4, então rede e interface web só podem ser testadas na placa.
+- they validate logic, not time; no latency measured in them holds for the board;
+- the qemu-pi4 network model was written from the Linux driver, without manufacturer documentation; a driver may work in it and fail on the board.
 
-## Rodar na placa
+## Run on the board
 
-1. Monte o conteúdo do cartão. O script baixa, uma única vez, os arquivos de firmware do repositório oficial da Raspberry Pi e junta a eles `config.txt` e `kernel8.img`:
+1. Assemble the card contents. The script downloads, once, the firmware files from the official Raspberry Pi repository and puts `config.txt` and `kernel8.img` next to them:
 
    ```powershell
-   scripts\make-sdcard.ps1               # só monta em build\sdcard
-   scripts\make-sdcard.ps1 -Drive E:     # monta e copia para o cartão em E:
+   scripts\make-sdcard.ps1               # only assembles in build\sdcard
+   scripts\make-sdcard.ps1 -Drive E:     # assembles and copies to the card in E:
    ```
 
-   Com `-Drive`, o script recusa unidades que não sejam removíveis ou não estejam em FAT32.
+   With `-Drive`, the script refuses drives that are not removable or not FAT32.
 
-2. Ligue o adaptador USB-serial ao conector GPIO da placa:
+2. Connect the USB-serial adapter to the board's GPIO header:
 
-   | Adaptador | Pino da placa |
-   |-----------|---------------|
+   | Adapter | Board pin |
+   |---------|-----------|
    | GND | 6 (GND) |
    | RX | 8 (GPIO14, TXD) |
    | TX | 10 (GPIO15, RXD) |
 
-   Não ligue o fio de 5 V do adaptador.
+   Do not connect the adapter's 5 V wire.
 
-3. Abra um terminal serial a 115200 baud, 8 bits, sem paridade, 1 bit de parada.
+3. Open a serial terminal at 115200 baud, 8 bits, no parity, 1 stop bit.
 
-4. Coloque o cartão na placa e energize.
+4. Insert the card into the board and power it on. On the first boot the system writes `MANIFEST.TXT` to the card with the default installation; once the network gets an address, the console prints the URL of the web interface, where the manifest can be edited.
 
-## Regras de codificação
+## Coding rules
 
-Obrigatórias no kernel, verificadas a cada compilação:
+Mandatory in the kernel, checked on every build:
 
-- sem recursão;
-- todo laço com limite fixo;
-- sem alocação dinâmica de memória depois da partida;
-- tipos de tamanho fixo e nenhum comportamento indefinido da linguagem;
-- todo valor de retorno conferido; avisos tratados como erro.
+- no recursion;
+- every loop has a fixed bound;
+- no dynamic memory allocation after startup;
+- fixed-width types and no undefined behavior of the language;
+- every return value checked; warnings treated as errors.
 
-Há dois laços sem fim permitidos no kernel: o laço principal e a parada do sistema. Assembly embutido e conversão de inteiro em ponteiro ficam restritos a `kernel/include/arch.h`.
+Two endless loops are allowed in the kernel: the idle loop and the system halt. Inline assembly and integer-to-pointer conversions are confined to `kernel/include/arch.h`.
 
-A lista de verificações do analisador está em [`.clang-tidy`](.clang-tidy).
+The list of static analyzer checks is in [`.clang-tidy`](.clang-tidy). Third-party code (lwIP) is not held to these rules; it runs isolated in a process.
 
-## Roteiro
+## Roadmap
 
-A primeira meta é o sistema no ar e acessível pelo navegador; os núcleos dedicados vêm em seguida.
+The first goal was the system up and reachable from the browser; the dedicated cores come next.
 
-| Etapa | Entrega | Situação |
-|-------|---------|----------|
-| 0 | Bancada: toolchain, emulador, cartão SD, console serial | Verificada no emulador |
-| 1 | Base: MMU e caches, exceções, GIC, timer | Verificada no emulador |
-| 2 | Processos isolados e prioridade fixa com limite de tempo | A fazer |
-| 3 | Dispositivos em processo e tabela de permissões | A fazer |
-| 4 | Rede: driver da Ethernet e pilha lwIP | A fazer |
-| 5 | Serviço web e página de estatísticas | A fazer |
-| 6 | Observabilidade e parâmetros | A fazer |
-| 7 | Multicore | A fazer |
-| 8 | Piso do hardware e núcleo dedicado | A fazer |
-| 9 | Canais entre núcleos | A fazer |
-| 10 | Carga de programas do cartão SD e manifesto | A fazer |
-| 11 | Entrada e saída de automação: GPIO, serial, SPI, I2C | A fazer |
+| Stage | Deliverable | Status |
+|-------|-------------|--------|
+| 0 | Bench: toolchain, emulator, SD card, serial console | Verified in the emulator |
+| 1 | Base: MMU and caches, exceptions, GIC, timer | Verified in the emulator |
+| 2 | Isolated processes and fixed priority with time limits | Verified in the emulator |
+| 3 | Devices in processes and the permission table | Partial: interrupt delivery to processes is missing |
+| 4 | Network: Ethernet driver and lwIP stack | Verified in the emulator |
+| 5 | Web service and statistics page | Verified in the emulator |
+| 6 | Observability and parameters | To do |
+| 7 | Multicore | To do |
+| 8 | Hardware floor and the dedicated core | To do |
+| 9 | Channels between cores | To do |
+| 10 | Loading programs from the SD card and the manifest | Verified in the emulator |
+| 11 | Automation I/O: GPIO, serial, SPI, I2C | To do |
 
-Os critérios de aceite de cada etapa estão no plano.
+The acceptance criteria of each stage are in the plan.
 
-## Documentação
+## Documentation
 
-- [`docs/PLANO.md`](docs/PLANO.md) — decisões, requisitos, arquitetura, etapas e riscos.
-- [`docs/ESTATISTICAS.md`](docs/ESTATISTICAS.md) — requisitos da página de estatísticas do sistema (proposta em revisão).
+- [`docs/PLANO.md`](docs/PLANO.md) — decisions, requirements, architecture, stages and risks (Portuguese).
+- [`docs/ESTATISTICAS.md`](docs/ESTATISTICAS.md) — requirements of the system statistics page (Portuguese, proposal under review).
 
-## Licença
+## License
 
-Código fechado. Todos os direitos reservados.
+Closed source. All rights reserved.
 
-A pilha de rede prevista (lwIP) é de terceiros e distribuída sob licença BSD.
+The network stack (lwIP) is third-party software distributed under the BSD license.

@@ -1,7 +1,7 @@
-# RTR-OS - roda build\kernel8.img no QEMU emulando o Raspberry Pi 4.
-# O console serial sai neste terminal. Para sair: Ctrl+A e depois X.
+# RTR-OS - runs build\kernel8.img in the official QEMU, emulating the Raspberry Pi 4.
+# The serial console shows in this terminal. To quit: Ctrl+A then X.
 #
-#   -Gdb   espera um depurador em localhost:1234 antes de iniciar
+#   -Gdb   waits for a debugger on localhost:1234 before starting
 param(
     [switch]$Gdb
 )
@@ -10,7 +10,7 @@ $ErrorActionPreference = 'Stop'
 
 $root = Split-Path -Parent $PSScriptRoot
 $image = Join-Path $root 'build\kernel8.img'
-if (-not (Test-Path $image)) { throw "Imagem ausente: rode scripts\build.ps1 primeiro." }
+if (-not (Test-Path $image)) { throw "Image missing: run scripts\build.ps1 first." }
 
 $qemu = Get-Command qemu-system-aarch64 -ErrorAction SilentlyContinue
 $qemu = if ($qemu) { $qemu.Source } else { 'C:\Program Files\qemu\qemu-system-aarch64.exe' }

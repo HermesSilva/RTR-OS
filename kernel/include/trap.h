@@ -1,13 +1,16 @@
-/* RTR-OS - tratamento de interrupções. */
+/* RTR-OS - kernel entries: interrupts, system calls and process faults. */
 #ifndef RTR_TRAP_H
 #define RTR_TRAP_H
 
 #include <stdint.h>
 
-/* Chamada por vectors.S a cada interrupção tomada pelo kernel. */
-void trap_irq(void);
+#include "arch.h"
 
-/* Interrupções recebidas para as quais não há tratador. */
-uint64_t trap_unhandled_irqs(void);
+/*
+ * Called by vectors.S. They return the frame of the process that should
+ * get the CPU, or NULL for the core to go idle.
+ */
+struct trap_frame *trap_irq(void);
+struct trap_frame *trap_process_sync(struct trap_frame *frame, uint64_t syndrome, uint64_t address);
 
 #endif

@@ -1,33 +1,34 @@
-/* RTR-OS - interrupção periódica do timer e medição do atraso de tratamento. */
+/*
+ * RTR-OS - the core timer in one-shot mode.
+ *
+ * There is no periodic tick: the scheduler programs the next instant it
+ * cares about, and the core is not interrupted before that.
+ */
 #ifndef RTR_TIMER_H
 #define RTR_TIMER_H
 
 #include <stdint.h>
 
+#include "rtr/abi.h"
+
+void timer_init(void);
+
+/* Programs the next interrupt for the absolute instant `instant`. */
+void timer_arm(uint64_t instant);
+
 /*
- * Atraso = tempo entre o instante programado e a entrada do tratador,
- * medido pelo contador do sistema. Valores em ticks do contador.
+ * Called on entry to the timer interrupt handler. Returns the current
+ * instant and records the delay relative to the programmed instant.
  */
-struct timer_stats {
-    uint64_t fires;                     /* disparos tratados desde o início */
-    uint64_t skipped;                   /* períodos pulados por atraso maior que um período */
-    uint64_t window_fires;              /* disparos desde a última leitura */
-    uint64_t window_min;
-    uint64_t window_max;
-    uint64_t window_sum;
-    uint64_t worst;                     /* maior atraso desde o início */
-};
+uint64_t timer_irq_enter(void) __attribute__((warn_unused_result));
 
-/* Passa a interromper a cada `period` ticks, em instantes absolutos. */
-void timer_start(uint64_t period);
+/* Copies the delay measurement and restarts its window. */
+void timer_read_delay(struct rtr_duration *out);
 
-/* Chamada pelo tratador de interrupções. */
-void timer_handle_irq(void);
+/* Records `value` in a duration: window, worst case and instant of the worst case. */
+void duration_record(struct rtr_duration *duration, uint64_t value, uint64_t instant);
 
-/* Períodos decorridos desde o início: disparos tratados mais os pulados. */
-uint64_t timer_periods(void);
-
-/* Copia as estatísticas e reinicia a janela. */
-void timer_read_stats(struct timer_stats *out);
+/* Copies a duration and restarts its window, keeping the worst case. */
+void duration_read(struct rtr_duration *duration, struct rtr_duration *out);
 
 #endif

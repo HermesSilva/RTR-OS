@@ -33,7 +33,7 @@ Situação: **em implementação**, etapa por etapa, desde 2026-10-02. As decis�
 | D14 — interface web | Servida pelo próprio Pi, por Ethernet, por processos de núcleo compartilhado |
 | D8 — interface dos programas | Própria do RTR-OS e pequena, expressando núcleo dedicado, prioridades e canais. O processo de tempo real nunca bloqueia. Os programas contam também com a parte da biblioteca padrão de C que não depende do sistema. POSIX fica fora do plano |
 | D9 — norma de codificação | Conjunto próprio e curto de regras, verificado por ferramenta a cada compilação (detalhes na seção 4). Obrigatório no kernel e no conjunto de partida; recomendado nos programas |
-| D10 — organização | Repositório git com o remoto `github.com/HermesSilva/RTR-OS`; o remoto foi tornado privado em 2026-10-02 e passou a receber o histórico. Código fechado, todos os direitos reservados, até decisão em contrário. A pasta `RTR-SO` será renomeada para `RTR-OS` ao fim de uma sessão de trabalho |
+| D10 — organização | Repositório git com o remoto `github.com/HermesSilva/RTR-OS`. Em 2026-10-03 decidiu-se **tudo público e open source**: RTR-OS e RTR-Bench sob **Apache-2.0**; o fork do emulador (`HermesSilva/qemu-pi4`, com a sonda `rtr_scope.c`) sob GPL-2.0-or-later, como o QEMU. Pendente: `LICENSE`, cabeçalhos, README e visibilidade do remoto (hoje privado) — a mudar quando o usuário pedir o push. A pasta `RTR-SO` será renomeada para `RTR-OS` ao fim de uma sessão de trabalho |
 | D11 — núcleos compartilhados | Escalonamento por prioridade fixa com preempção: roda sempre a tarefa pronta de maior prioridade. As propostas de contratos com EDF e de tabela de tempo foram descartadas |
 | D11a — limite de tempo | Toda tarefa de núcleo compartilhado tem um limite de tempo de CPU por período: o declarado no manifesto ou, na falta dele, um limite default. Não existe tarefa sem limite. Quem estoura é suspenso pelo kernel até o período seguinte |
 | D11b — excesso de carga | Se a soma dos limites das tarefas de um núcleo passar de 100%, o sistema não recusa a partida: faz um rateio, reduzindo os limites na mesma proporção até a soma ficar abaixo de 100% |
@@ -68,6 +68,7 @@ Duas ideias o distinguem:
 - **RF9** — Detectar que o processo dedicado perdeu o passo e levar as saídas dele a um estado seguro.
 - **RF11** — Oferecer uma interface web para operar e monitorar o sistema, sem perturbar os processos de tempo real.
 - **RF12** — Oferecer, na interface web, uma página de estatísticas do sistema com o básico geral, medido pelo próprio kernel. Os requisitos detalhados estão em `ESTATISTICAS.md`, em revisão.
+- **RF13** — Oferecer, na interface web, uma aba de configuração com tudo o que pode ser configurado, em campos de alto nível; salvar grava o manifesto no cartão e reinicia a placa. Temas claro, escuro e âmbar.
 - **RF10** — Dar ao processo dedicado acesso direto ao contador de tempo e aos registradores dos seus dispositivos, sem chamada ao kernel.
 
 ### Tempo real
@@ -216,13 +217,54 @@ O usuário confirmou em 2026-10-02 que dispõe de todos esses itens.
 - **Firmware da GPU**: o firmware da Broadcom continua ativo depois do boot e controla clocks e temperatura. Se ele alterar a frequência da CPU, a contagem de ciclos deixa de servir como base de tempo. O efeito sobre o determinismo é desconhecido.
 - **Caminho até o pino**: a escrita no registrador de GPIO atravessa um barramento cuja latência e variação não são conhecidas. Elas definem o piso real da variação de borda.
 - **O emulador não reproduz tempo**: o QEMU valida lógica, não latência. Toda afirmação de tempo real precisa de medição na placa.
-- **O emulador não tem a placa de rede do Pi 4**: o QEMU 11.1 não emula o controlador Ethernet (GENET) na máquina `raspi4b`; verificado no executável instalado. As etapas 4 e 5 (rede e serviço web) só podem ser testadas na placa física, o que torna cada ciclo de teste mais lento e deixa o driver da Ethernet sem rede de segurança.
+- **O QEMU oficial não tem a placa de rede do Pi 4**: o QEMU 11.1 não emula o controlador Ethernet (GENET) na máquina `raspi4b`; verificado no executável instalado. Por escolha do usuário, o projeto passou a usar também o **qemu-pi4**, um fork do QEMU 11.1 que emula a Ethernet com o PHY, o PCIe, o USB, o GPIO, o SPI e o PWM do Pi 4. Ele foi compilado no WSL (`scripts/build-qemu-pi4.sh`) e roda a imagem do kernel (`scripts/test-qemu-pi4.ps1`). Com ele, as etapas 4 e 5 podem ser desenvolvidas no emulador.
+- **O modelo de rede do emulador não é a placa**: não há documentação pública do controlador Ethernet do Pi 4, e o modelo do qemu-pi4 foi escrito a partir do driver do Linux. Um driver pode funcionar no emulador e falhar na placa, que continua sendo o critério de aceite.
 - **Periféricos difíceis**: no Pi 4, o USB fica atrás de um controlador PCIe e está fora do plano. A Ethernet exige driver próprio e uma pilha de protocolos; é o maior bloco de trabalho fora do núcleo do sistema, e passou para o início do plano por ser a primeira meta de implementação.
 - **Cartão SD no caminho do boot (D6)**: o sistema passa a depender de um driver de cartão, que é trabalhoso e varia com o cartão usado, e a leitura vira um ponto de falha na partida. Leituras durante a operação usam o barramento compartilhado e podem interferir nos núcleos dedicados; o efeito precisa ser medido.
 
 ## 9. Estado atual
 
-**Etapas 0 e 1 — implementadas e verificadas no emulador; aguardam o teste na placa física.**
+**Etapas 0 a 5 — implementadas e verificadas no emulador qemu-pi4. Nada foi testado na placa física ainda.**
+
+A primeira meta foi atingida no emulador em 2026-10-02: o sistema sobe e a página de estatísticas abre no navegador.
+
+Etapa 2 — processos e prioridades:
+
+- Processos em EL0, cada um com o seu espaço de endereçamento; o kernel é inacessível a eles. Programas embutidos na imagem, com cabeçalho próprio, carregados com permissão por seção.
+- Escalonador de prioridade fixa com preempção, ativações periódicas em instantes absolutos, limite de tempo por período e timer em disparo único.
+- Chamadas ao kernel: concluir o período, escrever no console, consultar região atribuída, ler estatísticas. O contador do sistema é lido pelos processos sem entrar no kernel.
+- Verificado: tarefa de maior prioridade em laço infinito é contida a cada período e as de baixo seguem rodando; processo que grava na memória do kernel é encerrado e o sistema continua; instalação com 120% de carga declarada parte com rateio para 95%, com a tarefa do sistema mantida no piso (compilação de ensaio `RTR_OVERLOAD_TEST`).
+
+Etapa 3 — dispositivos em processo:
+
+- Tabela de regiões por processo: registradores de dispositivo mapeados no espaço do processo e memória de DMA sem cache, com endereço físico conhecido. Um dispositivo só pode ser atribuído a um processo.
+- **Pendente**: entrega de interrupção a processo. O processo de rede trabalha por consulta periódica e não precisa dela; a etapa só fecha quando ela existir. A recusa de um dispositivo declarado por dois processos está implementada, mas não foi ensaiada.
+
+Etapas 4 e 5 — rede e serviço web:
+
+- Um processo de núcleo compartilhado (`rede-web`) reúne o driver da Ethernet, a lwIP 2.2.1 e o servidor web. O driver é próprio e trabalha por consulta, a cada 1 ms.
+- O servidor atende `/` (página de estatísticas) e `/api/stats` (os mesmos dados em JSON, lidos do kernel a cada pedido).
+- Verificado no qemu-pi4: endereço obtido por DHCP, página aberta pelo navegador do Windows, atualização a cada segundo, rota inexistente respondida com 404.
+- **Não verificado**: o driver da Ethernet na placa real. O modelo do emulador recebe quadros no anel 0 e a placa, até onde se sabe, no anel 16; o driver prepara os dois. O ajuste do PHY para a placa foi escrito sem poder ser testado.
+- Limitações conhecidas: o endereço físico (MAC) é lido do controlador e, se o firmware não o tiver deixado lá, cai em um valor fixo; a memória total da placa aparece como "sem dado" porque o device tree ainda não é lido; a janela das medidas é única, e não uma por leitor (EK6).
+- No emulador, o processo de rede às vezes estoura o limite de 800 µs por período. O estouro só adia o trabalho para o período seguinte, e a página o mostra.
+
+Acréscimos de 2026-10-02, depois da primeira meta:
+
+- **Idioma**: por decisão do usuário, página web, mensagens, código, comentários, scripts e README passaram ao inglês. Estes documentos de planejamento continuam em português.
+- **Aba de configuração (RF13)**: a interface web ganhou a aba *Configuration*, com campos de alto nível (combos, caixas de marcação, unidades) para tudo o que o manifesto descreve: por processo, programa, argumento, prioridade, período, limite, piso, tarefa de sistema, pilha, dispositivos e memória de DMA. Salvar grava o manifesto no cartão e reinicia a placa (coerente com a D3a). Três temas: claro, escuro e âmbar.
+- **Etapa 10, em parte**: driver do cartão SD (EMMC2, por consulta), leitura e escrita de FAT32 na raiz, e o manifesto `MANIFEST.TXT` em texto, lido no boot. Sem manifesto no cartão, o padrão é gravado; sem cartão utilizável, valem os padrões embutidos e a aba avisa que não há como salvar. Os programas continuam embutidos na imagem; o manifesto os cita pelo nome.
+- **Conjunto de partida (D6a) em prática**: o único processo embutido é `system`, dono do cartão e da Ethernet. Ele lê o manifesto, pede ao kernel a criação dos demais processos (chamadas restritas ao conjunto de partida, só antes do selo) e sela a instalação. O reboot é uma chamada ao kernel, também restrita a ele.
+- Verificado no qemu-pi4: manifesto criado no primeiro boot e lido no seguinte; manifesto inválido recusado com a linha do erro; gravação pela aba, reboot e nova configuração em vigor.
+- **Etapa 10 concluída no emulador**: os programas são arquivos `.BIN` no cartão; só o conjunto de partida fica na imagem. O processo `system` lê o arquivo e o entrega ao kernel na criação do processo. A aba lista os programas do cartão (nome, descrição, tamanho, classe) ao adicionar um processo.
+- **Pacotes de aplicação (.rpkg)**: por decisão do usuário, um aplicativo é distribuído como um pacote `.rpkg`, um contêiner sem compressão com os arquivos de que ele precisa, enviado pela página ("Install app") e desempacotado na raiz do cartão. O build gera um pacote por programa. O pacote não pode substituir o manifesto.
+- **Modulador PWM como programa separado (`pwm`)**: tempo real, dono do dispositivo `gpio`; o período do PWM é o período do processo, e o argumento define pino e ciclo de trabalho. É o caso de ensaio do núcleo dedicado quando ele existir.
+- **Osciloscópio virtual**: um dispositivo acrescentado ao qemu-pi4 (`rtr-scope`, em `tools/qemu-pi4/`) registra as transições dos pinos com o instante virtual; `tools/scope/scope.py`, rodando no Windows, desenha as formas de onda e mede frequência, ciclo de trabalho e jitter de período. Verificado: PWM a 1 kHz e 30% capturado no pino 18; com o relógio virtual determinístico (`-icount`) o jitter medido é de 8 ns e a frequência sai 2,9% acima do nominal, um efeito do próprio modo `icount` do emulador, não do kernel.
+- **Osciloscópio ao vivo**: a sonda `rtr-scope` transmite por socket TCP (porta 5555) e responde o nível atual dos pinos a quem se conecta; `tools/scope/live.py` (Python, só relé) serve a página `live.html`, que desenha em tempo real com base de tempo, disparo auto/normal/roll, holdoff, cursores e medidas, e exporta VCD para o PulseView. Verificado: PWM capturado ao vivo; com `-icount` o período fica constante (972 µs, jitter 0); com o relógio do Windows as larguras oscilam, culpa do emulador.
+- **Processo de tempo real na configuração**: por decisão do usuário, um app RT não tem prioridade, limite, tarefa de sistema nem piso; declara `core N` (núcleo dedicado, 1 a 3) e período. Provisoriamente, até os núcleos dedicados existirem, o `system` lhe dá prioridade 255 e limite de metade do período no núcleo 0. Todo campo que um app não pode configurar fica oculto na aba.
+- **D18 — classe de tempo real**: o cabeçalho de cada programa declara, na compilação, se ele foi escrito para escalonamento de tempo real. O manifesto dá a cada processo uma classe, `realtime` ou `standard`; os de tempo real correm antes de todos os comuns, e um programa sem a marca não pode receber a classe de tempo real: a aba impede, a gravação recusa e o kernel recusa. A classe é o atributo que mais adiante levará o processo ao núcleo dedicado (etapa 8).
+
+Etapas 0 e 1 — base:
 
 - O kernel (pasta `kernel/`) dá boot em EL1, inicializa o console na UART0 e imprime a identificação do sistema.
 - Liga a MMU e as caches com mapa identidade e permissões por seção: código só para leitura e execução, constantes só para leitura, dados e RAM sem execução, periféricos sem cache.

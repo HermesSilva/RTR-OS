@@ -2,5 +2,8 @@ build/
 build-*/
 sdcard/firmware/
 
-# Exportação de conversa, mantida só na máquina local
+# RTR-Bench lives in its own repository, nested here for convenience
+RTR-Bench/
+
+# Conversation export, kept only on the local machine
 vamos-construir-um-so-realt-2026-10-02.html

@@ -1,4 +1,4 @@
-/* RTR-OS - UART0 (PL011) do BCM2711. */
+/* RTR-OS - BCM2711 UART0 (PL011). */
 #include "arch.h"
 #include "board.h"
 
@@ -24,14 +24,14 @@
 #define GPIO14_PULL     28U
 #define GPIO15_PULL     30U
 
-/* Divisor para 115200 baud: 48e6 / (16 * 115200) = 26,04 -> 26 inteiro, 3/64 fracionário. */
+/* Divisor for 115200 baud: 48e6 / (16 * 115200) = 26.04 -> 26 integer, 3/64 fractional. */
 #define BAUD_INTEGER    26U
 #define BAUD_FRACTION   3U
 
 /*
- * Um caractere leva cerca de 87 us para sair a 115200 baud. O limite abaixo
- * equivale a bem mais do que isso mesmo no processador mais rápido, e impede
- * que um transmissor travado prenda o kernel.
+ * One character takes about 87 us at 115200 baud. The limit below is far
+ * more than that even on the fastest processor, and keeps a stuck
+ * transmitter from holding the kernel.
  */
 #define TX_WAIT_LIMIT   1000000U
 
@@ -41,7 +41,7 @@ void uart_init(void)
 
     mmio_write32(UART_CR, 0U);
 
-    /* GPIO14 e GPIO15 em ALT0 (TXD0/RXD0), sem pull */
+    /* GPIO14 and GPIO15 as ALT0 (TXD0/RXD0), no pull */
     value = mmio_read32(GPFSEL1);
     value &= ~((7U << GPIO14_FSEL) | (7U << GPIO15_FSEL));
     value |= (GPIO_ALT0 << GPIO14_FSEL) | (GPIO_ALT0 << GPIO15_FSEL);

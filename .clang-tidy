@@ -1,11 +1,11 @@
-# RTR-OS - verificações estáticas exigidas pelas regras de codificação (D9).
+# RTR-OS - static checks required by the coding rules (D9).
 #
-# misc-no-recursion impõe a regra "sem recursão". As demais procuram erros de
-# lógica, comportamento indefinido e valores de retorno ignorados.
+# misc-no-recursion enforces the "no recursion" rule. The others look for
+# logic errors, undefined behavior and ignored return values.
 #
-# Desligadas, com motivo:
-#   bugprone-easily-swappable-parameters   acusa qualquer função com dois inteiros seguidos
-#   clang-analyzer-security.insecureAPI.*  trata de funções de libc que o kernel não tem
+# Disabled, with reason:
+#   bugprone-easily-swappable-parameters   flags any function with two adjacent integers
+#   clang-analyzer-security.insecureAPI.*  about libc functions the kernel does not have
 Checks: >
   -*,
   clang-analyzer-*,

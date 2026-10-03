@@ -1,4 +1,4 @@
-/* RTR-OS - rotinas de memória exigidas pelo compilador. */
+/* RTR-OS - memory routines required by the compiler. */
 #include "memory.h"
 
 #include <stdint.h>

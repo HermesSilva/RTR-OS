@@ -1,0 +1,20 @@
+# RTR-OS manifest - example: the software PWM modulator on GPIO 18
+# (1 kHz, 30 % duty: argument = pin << 8 | duty = 18 * 256 + 30 = 4638).
+version 1
+
+process system
+  priority 4
+  period 1 ms
+  limit 800 us
+  system yes
+  floor 400 us
+end
+
+process pwm
+  program pwm
+  argument 4638
+  core 1
+  period 1 ms
+  stack 4
+  device gpio
+end

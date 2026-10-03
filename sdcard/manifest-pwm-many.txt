@@ -1,0 +1,65 @@
+# RTR-OS manifest - example: six software PWM modulators on six GPIOs (the
+# system allows 7 processes), for exercising the bench. argument = pin << 8 | duty.
+version 1
+
+process system
+  priority 4
+  period 1 ms
+  limit 800 us
+  system yes
+  floor 400 us
+end
+
+process pwm4
+  program pwm
+  argument 1034
+  core 1
+  period 1 ms
+  stack 4
+  device gpio
+end
+
+process pwm17
+  program pwm
+  argument 4372
+  core 1
+  period 2 ms
+  stack 4
+  device gpio
+end
+
+process pwm18
+  program pwm
+  argument 4638
+  core 1
+  period 1 ms
+  stack 4
+  device gpio
+end
+
+process pwm22
+  program pwm
+  argument 5672
+  core 1
+  period 3 ms
+  stack 4
+  device gpio
+end
+
+process pwm23
+  program pwm
+  argument 5950
+  core 1
+  period 2 ms
+  stack 4
+  device gpio
+end
+
+process pwm24
+  program pwm
+  argument 6220
+  core 1
+  period 5 ms
+  stack 4
+  device gpio
+end

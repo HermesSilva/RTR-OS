@@ -1,4 +1,4 @@
-/* RTR-OS - controlador de interrupções GIC-400 (GICv2) do BCM2711. */
+/* RTR-OS - BCM2711 GIC-400 (GICv2) interrupt controller. */
 #include <stddef.h>
 
 #include "arch.h"
@@ -15,7 +15,7 @@
 #define GICC_IAR            (GICC_BASE + 0x00CUL)
 #define GICC_EOIR           (GICC_BASE + 0x010UL)
 
-#define IRQ_COUNT           1020U       /* de 1020 em diante não há interrupção real */
+#define IRQ_COUNT           1020U       /* from 1020 on there is no real interrupt */
 #define IRQ_ID_MASK         0x3FFU
 #define IRQ_PRIORITY        0xA0U
 #define PRIORITY_MASK_ALL   0xFFU
@@ -37,7 +37,7 @@ void gic_enable_irq(uint32_t irq)
         return;
     }
 
-    /* Um byte de prioridade por interrupção, quatro por registrador. */
+    /* One priority byte per interrupt, four per register. */
     priority_reg = GICD_IPRIORITYR + (uintptr_t)(irq / 4U) * 4U;
     shift = (irq % 4U) * 8U;
     value = mmio_read32(priority_reg);
@@ -45,7 +45,7 @@ void gic_enable_irq(uint32_t irq)
     value |= IRQ_PRIORITY << shift;
     mmio_write32(priority_reg, value);
 
-    /* Um bit de habilitação por interrupção, 32 por registrador. */
+    /* One enable bit per interrupt, 32 per register. */
     mmio_write32(GICD_ISENABLER + (uintptr_t)(irq / 32U) * 4U, 1U << (irq % 32U));
 }
 
