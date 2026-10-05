@@ -7,3 +7,6 @@ RTR-Bench/
 
 # Conversation export, kept only on the local machine
 vamos-construir-um-so-realt-2026-10-02.html
+
+# RTR-Cable (the virtual audio cable driver) lives in its own repository too
+RTR-Cable/
